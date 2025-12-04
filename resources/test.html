@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=1920, height=1080">
+    <title>HTML2NDI Test Page</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            width: 1920px;
+            height: 1080px;
+            background: linear-gradient(135deg, #0c0c0c 0%, #1a1a2e 50%, #16213e 100%);
+            font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .container {
+            text-align: center;
+        }
+
+        .logo {
+            font-size: 120px;
+            font-weight: 800;
+            background: linear-gradient(90deg, #00d2ff, #3a7bd5, #00d2ff);
+            background-size: 200% 100%;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            animation: shimmer 3s ease-in-out infinite;
+            margin-bottom: 20px;
+        }
+
+        @keyframes shimmer {
+            0%, 100% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+        }
+
+        .subtitle {
+            font-size: 36px;
+            color: #ffffff;
+            font-weight: 300;
+            letter-spacing: 8px;
+            text-transform: uppercase;
+            margin-bottom: 60px;
+        }
+
+        .stats {
+            display: flex;
+            justify-content: center;
+            gap: 80px;
+            margin-bottom: 60px;
+        }
+
+        .stat {
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 72px;
+            font-weight: 700;
+            color: #00d2ff;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .stat-label {
+            font-size: 18px;
+            color: #888;
+            text-transform: uppercase;
+            letter-spacing: 4px;
+            margin-top: 10px;
+        }
+
+        .time {
+            font-size: 200px;
+            font-weight: 200;
+            color: #fff;
+            font-variant-numeric: tabular-nums;
+            letter-spacing: -10px;
+            text-shadow: 0 0 60px rgba(0, 210, 255, 0.3);
+        }
+
+        .date {
+            font-size: 32px;
+            color: #666;
+            margin-top: 20px;
+            letter-spacing: 6px;
+        }
+
+        .pulse {
+            position: absolute;
+            bottom: 60px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .pulse-dot {
+            width: 12px;
+            height: 12px;
+            background: #00ff88;
+            border-radius: 50%;
+            animation: pulse 1.5s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.5; transform: scale(0.8); }
+        }
+
+        .pulse-text {
+            font-size: 16px;
+            color: #666;
+            text-transform: uppercase;
+            letter-spacing: 4px;
+        }
+
+        /* Animated background elements */
+        .bg-element {
+            position: absolute;
+            border-radius: 50%;
+            filter: blur(80px);
+            opacity: 0.15;
+            animation: float 20s ease-in-out infinite;
+        }
+
+        .bg-1 {
+            width: 600px;
+            height: 600px;
+            background: #3a7bd5;
+            top: -200px;
+            left: -200px;
+        }
+
+        .bg-2 {
+            width: 400px;
+            height: 400px;
+            background: #00d2ff;
+            bottom: -100px;
+            right: -100px;
+            animation-delay: -10s;
+        }
+
+        .bg-3 {
+            width: 300px;
+            height: 300px;
+            background: #00ff88;
+            top: 50%;
+            right: 10%;
+            animation-delay: -5s;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translate(0, 0); }
+            25% { transform: translate(50px, 50px); }
+            50% { transform: translate(0, 100px); }
+            75% { transform: translate(-50px, 50px); }
+        }
+
+        .frame-counter {
+            position: absolute;
+            top: 30px;
+            right: 40px;
+            font-size: 14px;
+            color: #444;
+            font-family: 'SF Mono', Monaco, monospace;
+        }
+    </style>
+</head>
+<body>
+    <div class="bg-element bg-1"></div>
+    <div class="bg-element bg-2"></div>
+    <div class="bg-element bg-3"></div>
+
+    <div class="container">
+        <div class="logo">HTML2NDI</div>
+        <div class="subtitle">Video Output Active</div>
+        
+        <div class="stats">
+            <div class="stat">
+                <div class="stat-value" id="fps">60</div>
+                <div class="stat-label">Frames/sec</div>
+            </div>
+            <div class="stat">
+                <div class="stat-value">1920×1080</div>
+                <div class="stat-label">Resolution</div>
+            </div>
+            <div class="stat">
+                <div class="stat-value" id="uptime">00:00</div>
+                <div class="stat-label">Uptime</div>
+            </div>
+        </div>
+
+        <div class="time" id="time">00:00:00</div>
+        <div class="date" id="date">Loading...</div>
+    </div>
+
+    <div class="pulse">
+        <div class="pulse-dot"></div>
+        <span class="pulse-text">NDI Stream Active</span>
+    </div>
+
+    <div class="frame-counter">
+        Frame: <span id="frame">0</span>
+    </div>
+
+    <script>
+        let frameCount = 0;
+        let startTime = Date.now();
+        let lastSecond = Date.now();
+        let framesThisSecond = 0;
+
+        function updateTime() {
+            const now = new Date();
+            
+            // Time
+            const hours = now.getHours().toString().padStart(2, '0');
+            const minutes = now.getMinutes().toString().padStart(2, '0');
+            const seconds = now.getSeconds().toString().padStart(2, '0');
+            document.getElementById('time').textContent = `${hours}:${minutes}:${seconds}`;
+            
+            // Date
+            const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+            document.getElementById('date').textContent = now.toLocaleDateString('en-US', options);
+            
+            // Uptime
+            const uptime = Math.floor((Date.now() - startTime) / 1000);
+            const uptimeMin = Math.floor(uptime / 60).toString().padStart(2, '0');
+            const uptimeSec = (uptime % 60).toString().padStart(2, '0');
+            document.getElementById('uptime').textContent = `${uptimeMin}:${uptimeSec}`;
+        }
+
+        function updateFrame() {
+            frameCount++;
+            framesThisSecond++;
+            
+            document.getElementById('frame').textContent = frameCount.toLocaleString();
+            
+            // Update FPS counter every second
+            if (Date.now() - lastSecond >= 1000) {
+                document.getElementById('fps').textContent = framesThisSecond;
+                framesThisSecond = 0;
+                lastSecond = Date.now();
+            }
+            
+            requestAnimationFrame(updateFrame);
+        }
+
+        // Initialize
+        updateTime();
+        setInterval(updateTime, 1000);
+        requestAnimationFrame(updateFrame);
+    </script>
+</body>
+</html>
+

@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- LaunchAgent identifier -->
+    <key>Label</key>
+    <string>com.html2ndi</string>
+    
+    <!-- Executable and arguments -->
+    <key>ProgramArguments</key>
+    <array>
+        <string>/usr/local/bin/html2ndi</string>
+        <string>--url</string>
+        <string>file:///usr/local/share/html2ndi/test.html</string>
+        <string>--width</string>
+        <string>1920</string>
+        <string>--height</string>
+        <string>1080</string>
+        <string>--fps</string>
+        <string>60</string>
+        <string>--ndi-name</string>
+        <string>HTML2NDI</string>
+        <string>--http-port</string>
+        <string>8080</string>
+        <string>--log-file</string>
+        <string>/var/log/html2ndi/html2ndi.log</string>
+    </array>
+    
+    <!-- Run at login/startup -->
+    <key>RunAtLoad</key>
+    <true/>
+    
+    <!-- Keep running if it crashes -->
+    <key>KeepAlive</key>
+    <dict>
+        <key>SuccessfulExit</key>
+        <false/>
+    </dict>
+    
+    <!-- Restart throttling -->
+    <key>ThrottleInterval</key>
+    <integer>10</integer>
+    
+    <!-- Working directory -->
+    <key>WorkingDirectory</key>
+    <string>/usr/local/share/html2ndi</string>
+    
+    <!-- Environment variables -->
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/usr/local/bin:/usr/bin:/bin</string>
+    </dict>
+    
+    <!-- Output logs -->
+    <key>StandardOutPath</key>
+    <string>/var/log/html2ndi/stdout.log</string>
+    
+    <key>StandardErrorPath</key>
+    <string>/var/log/html2ndi/stderr.log</string>
+    
+    <!-- Process settings -->
+    <key>ProcessType</key>
+    <string>Interactive</string>
+    
+    <key>LowPriorityIO</key>
+    <false/>
+    
+    <!-- Nice level (lower = higher priority) -->
+    <key>Nice</key>
+    <integer>-5</integer>
+</dict>
+</plist>
+

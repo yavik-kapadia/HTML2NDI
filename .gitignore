@@ -1,0 +1,31 @@
+# Build directories
+build/
+*.o
+*.a
+*.dylib
+*.so
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# macOS
+.DS_Store
+*.dSYM/
+
+# Logs
+*.log
+
+# NDI SDK (don't commit large binaries)
+NDI SDK*.tar.gz
+
+# CEF (auto-downloaded)
+cef_binary_*/
+
+# Temporary files
+*.tmp
+.cache/
+
