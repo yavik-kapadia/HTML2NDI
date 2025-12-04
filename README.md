@@ -64,6 +64,7 @@ HTML2NDI consists of two components:
 - HTTP control API per stream
 - 1920x1080 @ 60fps default resolution
 - Graceful shutdown and error handling
+- macOS unified logging (Console.app + file logs)
 
 ---
 
@@ -397,11 +398,30 @@ Each stream uses a unique cache directory:
 
 ### Logs
 
-Application logs are written to:
+Logs are stored in `~/Library/Logs/HTML2NDI/` and also sent to macOS unified logging (Console.app).
 
+| Component | Log File | Console.app Subsystem |
+|-----------|----------|----------------------|
+| Manager | `~/Library/Logs/HTML2NDI/manager.log` | `com.html2ndi.manager` |
+| Worker | `~/Library/Logs/HTML2NDI/html2ndi.log` | `com.html2ndi.worker` |
+
+**View logs in Terminal:**
+
+```bash
+# Manager logs
+tail -f ~/Library/Logs/HTML2NDI/manager.log
+
+# Worker logs
+tail -f ~/Library/Logs/HTML2NDI/html2ndi.log
 ```
-~/Library/Logs/html2ndi_debug.log
-```
+
+**View logs in Console.app:**
+
+1. Open Console.app
+2. Click "Start streaming"
+3. Filter by `com.html2ndi`
+
+Log files automatically rotate at 10MB (keeps 5 rotated files).
 
 ---
 
@@ -514,6 +534,7 @@ HTML2NDI/
 │   │   ├── StreamManager.swift
 │   │   ├── ManagerServer.swift
 │   │   ├── MenuBarView.swift
+│   │   ├── Logger.swift        # macOS unified logging
 │   │   └── Info.plist
 │   ├── Resources/
 │   │   └── AppIcon.icns
