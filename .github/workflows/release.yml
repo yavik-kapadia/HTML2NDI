@@ -167,6 +167,22 @@ jobs:
         generate_release_notes: true
         draft: false
         prerelease: false
+        body: |
+          ## Installation
+          
+          1. Download the `.dmg` file
+          2. Open the DMG and drag **HTML2NDI Manager** to Applications
+          3. **Important**: Before first launch, open Terminal and run:
+             ```
+             xattr -cr "/Applications/HTML2NDI Manager.app"
+             ```
+          4. Launch from Applications
+          
+          > **Note**: This removes the macOS quarantine flag. The app is unsigned but safe.
+          > Alternatively, right-click the app and select "Open" to bypass Gatekeeper.
+          
+          ---
+          
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
