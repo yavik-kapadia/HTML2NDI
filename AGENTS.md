@@ -169,8 +169,8 @@ Open dashboard: `http://localhost:8080`
 
 ### Creating a Release
 ```bash
-git tag v1.2.0
-git push origin v1.2.0
+git tag v1.3.0
+git push origin v1.3.0
 ```
 
 Produces:
@@ -202,6 +202,9 @@ Produces:
 - CEF render process crash recovery
 - Watchdog timer for main loop hang detection
 - macOS unified logging (os_log)
+- Prometheus metrics endpoint (/metrics) for Grafana
+- NDI tally state (program/preview)
+- Enhanced per-stream analytics (frames, bandwidth, uptime)
 
 ## Future Enhancements
 - Audio pipeline (WebAudio → NDI audio)
