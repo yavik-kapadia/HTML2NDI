@@ -70,9 +70,10 @@ bool OffscreenRenderer::initialize() {
     // Set subprocess path
     CefString(&settings.browser_subprocess_path).FromString(helper_path.string());
     
-    // Set cache path if specified
+    // Set cache path if specified (both cache_path and root_cache_path for multi-instance support)
     if (!config_.cef_cache_path.empty()) {
         CefString(&settings.cache_path).FromString(config_.cef_cache_path);
+        CefString(&settings.root_cache_path).FromString(config_.cef_cache_path);
     }
     
     // Set user agent if specified

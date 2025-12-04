@@ -50,6 +50,12 @@ class StreamInstance: ObservableObject, Identifiable {
         // Find available port
         httpPort = config.httpPort > 0 ? config.httpPort : findAvailablePort()
         
+        // Each stream needs its own cache directory to avoid CEF singleton conflicts
+        let cacheDir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first!
+            .appendingPathComponent("HTML2NDI")
+            .appendingPathComponent(id.uuidString)
+        try? FileManager.default.createDirectory(at: cacheDir, withIntermediateDirectories: true)
+        
         let process = Process()
         process.executableURL = URL(fileURLWithPath: workerPath)
         process.arguments = [
@@ -58,7 +64,8 @@ class StreamInstance: ObservableObject, Identifiable {
             "--width", String(config.width),
             "--height", String(config.height),
             "--fps", String(config.fps),
-            "--http-port", String(httpPort)
+            "--http-port", String(httpPort),
+            "--cache-path", cacheDir.path
         ]
         
         // Capture output
