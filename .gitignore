@@ -1,5 +1,6 @@
 # Build directories
 build/
+dist/
 *.o
 *.a
 *.dylib
@@ -11,29 +12,71 @@ build/
 *.swp
 *.swo
 *~
+.cursor/
 
 # macOS
 .DS_Store
 *.dSYM/
+Thumbs.db
 
 # Logs
 *.log
+logs/
 
-# NDI SDK (don't commit large binaries)
-NDI SDK*.tar.gz
+# NDI SDK (proprietary - don't commit)
+NDI SDK*/
+*.tar.gz
+*.pkg
 
-# CEF (auto-downloaded)
+# CEF (auto-downloaded during build)
 cef_binary_*/
 
 # Temporary files
 *.tmp
 .cache/
+tmp/
 
-# Browser caches
+# Browser/CEF caches
 GPUCache/
 DawnCache/
+Crashpad/
+CrashReports/
+
+# Playwright
 .playwright-mcp/
 
-# CEF crash reports
-Crashpad/
+# Swift Package Manager
+manager/.build/
+manager/.swiftpm/
+manager/Package.resolved
 
+# Xcode
+*.xcodeproj/
+*.xcworkspace/
+xcuserdata/
+DerivedData/
+
+# App bundles in development (keep source, ignore built)
+manager/build/
+
+# Python
+__pycache__/
+*.pyc
+.env
+venv/
+
+# Node (if any web tooling)
+node_modules/
+
+# Archives
+*.zip
+*.dmg
+*.tar
+*.tar.gz
+*.tar.bz2
+
+# Secrets
+.env
+.env.local
+*.pem
+*.key
