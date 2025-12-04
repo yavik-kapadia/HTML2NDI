@@ -80,3 +80,6 @@ node_modules/
 .env.local
 *.pem
 *.key
+
+# AWS policy files
+*-policy.json
