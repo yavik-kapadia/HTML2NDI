@@ -239,5 +239,45 @@ Application::FrameStats Application::get_frame_stats() const {
     return stats;
 }
 
+void Application::execute_javascript(const std::string& code) {
+    if (renderer_) {
+        renderer_->execute_javascript(code);
+    }
+}
+
+std::vector<Application::ConsoleMessage> Application::get_console_messages(size_t max_count, bool clear) {
+    std::vector<ConsoleMessage> result;
+    
+    if (renderer_ && renderer_->handler()) {
+        auto cef_messages = renderer_->handler()->GetConsoleMessages(max_count, clear);
+        result.reserve(cef_messages.size());
+        
+        for (const auto& msg : cef_messages) {
+            ConsoleMessage app_msg;
+            app_msg.level = msg.level;
+            app_msg.message = msg.message;
+            app_msg.source = msg.source;
+            app_msg.line = msg.line;
+            app_msg.timestamp = msg.timestamp;
+            result.push_back(std::move(app_msg));
+        }
+    }
+    
+    return result;
+}
+
+void Application::clear_console_messages() {
+    if (renderer_ && renderer_->handler()) {
+        renderer_->handler()->ClearConsoleMessages();
+    }
+}
+
+size_t Application::get_console_message_count() const {
+    if (renderer_ && renderer_->handler()) {
+        return renderer_->handler()->GetConsoleMessageCount();
+    }
+    return 0;
+}
+
 } // namespace html2ndi
 

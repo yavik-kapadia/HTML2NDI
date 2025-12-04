@@ -416,7 +416,7 @@ class ManagerServer {
                 .dot.on{background:var(--ok);box-shadow:0 0 10px var(--ok)}
                 .dot.off{background:var(--dim)}
                 .ndi-name{font-size:1.25rem;font-weight:600}
-                .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:.5rem;margin-bottom:1rem}
+                .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:.5rem;margin-bottom:1rem}
                 .stat{background:var(--input);padding:.5rem;border-radius:8px;text-align:center}
                 .stat-l{font-size:.65rem;color:var(--dim);text-transform:uppercase}
                 .stat-v{font-family:ui-monospace,monospace;font-size:.9rem;font-weight:600}
@@ -499,22 +499,12 @@ class ManagerServer {
                     if (!card) return;
                     
                     const stats = card.querySelectorAll('.stat-v');
-                    // Row 1: Status, FPS, Connections, Uptime
                     if (stats[0]) {
                         stats[0].textContent = s.isRunning ? (s.isHealthy ? 'Running' : 'Stalled') : 'Stopped';
                         stats[0].style.color = s.isRunning ? (s.isHealthy ? 'var(--ok)' : 'var(--err)') : 'var(--dim)';
                     }
                     if (stats[1]) stats[1].textContent = s.actualFps?.toFixed(1) || '-';
                     if (stats[2]) stats[2].textContent = s.connections || 0;
-                    if (stats[3]) stats[3].textContent = formatUptime(s.uptimeSeconds);
-                    // Row 2: Sent, Dropped, Drop %, Bandwidth
-                    if (stats[4]) stats[4].textContent = formatNumber(s.framesSent);
-                    if (stats[5]) {
-                        stats[5].textContent = formatNumber(s.framesDropped);
-                        stats[5].style.color = s.framesDropped > 0 ? 'var(--err)' : 'inherit';
-                    }
-                    if (stats[6]) stats[6].textContent = (s.dropRate * 100).toFixed(2) + '%';
-                    if (stats[7]) stats[7].textContent = (s.bandwidthMbps?.toFixed(0) || '-') + ' Mb/s';
                     
                     // Update tally indicators
                     const statusDiv = card.querySelector('.status');
@@ -560,17 +550,10 @@ class ManagerServer {
                             <label style="font-size:.7rem;color:var(--dim);text-transform:uppercase">NDI Access Group</label>
                             <input id="ndiGroups-${s.id}" data-stream-id="${s.id}" data-field="ndiGroups" value="${s.ndiGroups||'public'}" onchange="updateField('${s.id}','ndiGroups',this.value)" placeholder="public" style="width:100%" title="Comma-separated groups. Use 'public' for all.">
                         </div>
-                        <div class="stats">
+                        <div class="stats" style="margin-bottom:1rem">
                             <div class="stat"><div class="stat-l">Status</div><div class="stat-v" style="color:${s.isRunning?(s.isHealthy?'var(--ok)':'var(--err)'):'var(--dim)'}">${s.isRunning?(s.isHealthy?'Running':'Stalled'):'Stopped'}</div></div>
                             <div class="stat"><div class="stat-l">FPS</div><div class="stat-v">${s.actualFps?.toFixed(1)||'-'}</div></div>
                             <div class="stat"><div class="stat-l">Connections</div><div class="stat-v">${s.connections||0}</div></div>
-                            <div class="stat"><div class="stat-l">Uptime</div><div class="stat-v">${formatUptime(s.uptimeSeconds)}</div></div>
-                        </div>
-                        <div class="stats" style="margin-bottom:1rem">
-                            <div class="stat"><div class="stat-l">Sent</div><div class="stat-v">${formatNumber(s.framesSent)}</div></div>
-                            <div class="stat"><div class="stat-l">Dropped</div><div class="stat-v" style="color:${s.framesDropped>0?'var(--err)':'inherit'}">${formatNumber(s.framesDropped)}</div></div>
-                            <div class="stat"><div class="stat-l">Drop %</div><div class="stat-v">${(s.dropRate*100).toFixed(2)}%</div></div>
-                            <div class="stat"><div class="stat-l">Bandwidth</div><div class="stat-v">${s.bandwidthMbps?.toFixed(0)||'-'} Mb/s</div></div>
                         </div>
                         <div class="url-row">
                             <input id="url-${s.id}" data-stream-id="${s.id}" data-field="url" value="${s.url}" onchange="updateField('${s.id}','url',this.value)" placeholder="URL">
@@ -655,23 +638,6 @@ class ManagerServer {
             }
             
             function toast(msg) { const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),3000); }
-            
-            function formatUptime(seconds) {
-                if (!seconds || seconds < 0) return '-';
-                const h = Math.floor(seconds / 3600);
-                const m = Math.floor((seconds % 3600) / 60);
-                const s = Math.floor(seconds % 60);
-                if (h > 0) return `${h}h ${m}m`;
-                if (m > 0) return `${m}m ${s}s`;
-                return `${s}s`;
-            }
-            
-            function formatNumber(n) {
-                if (!n) return '0';
-                if (n >= 1000000) return (n/1000000).toFixed(1) + 'M';
-                if (n >= 1000) return (n/1000).toFixed(1) + 'K';
-                return n.toString();
-            }
             
             function refreshThumbnails() {
                 document.querySelectorAll('img.thumb').forEach(img => {

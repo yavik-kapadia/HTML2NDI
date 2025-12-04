@@ -196,7 +196,7 @@ void HttpServer::setup_routes() {
     // CORS headers
     auto add_cors = [](httplib::Response& res) {
         res.set_header("Access-Control-Allow-Origin", "*");
-        res.set_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+        res.set_header("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS");
         res.set_header("Access-Control-Allow-Headers", "Content-Type");
     };
     
@@ -513,6 +513,83 @@ void HttpServer::setup_routes() {
             json error = {{"error", e.what()}};
             res.set_content(error.dump(), "application/json");
         }
+    });
+    
+    // POST /execute - Execute JavaScript in the browser
+    server_->Post("/execute", [this, add_cors](const httplib::Request& req, httplib::Response& res) {
+        add_cors(res);
+        
+        try {
+            auto body = json::parse(req.body);
+            
+            if (!body.contains("code") || !body["code"].is_string()) {
+                res.status = 400;
+                res.set_content(R"({"error": "Missing 'code' field"})", "application/json");
+                return;
+            }
+            
+            std::string code = body["code"].get<std::string>();
+            
+            LOG_INFO("HTTP API: execute JavaScript (%zu chars)", code.length());
+            app_->execute_javascript(code);
+            
+            json response = {
+                {"success", true},
+                {"code_length", code.length()}
+            };
+            res.set_content(response.dump(), "application/json");
+            
+        } catch (const json::exception& e) {
+            res.status = 400;
+            json error = {{"error", e.what()}};
+            res.set_content(error.dump(), "application/json");
+        }
+    });
+    
+    // GET /console - Get console messages
+    server_->Get("/console", [this, add_cors](const httplib::Request& req, httplib::Response& res) {
+        add_cors(res);
+        
+        size_t limit = 100;
+        bool clear = false;
+        
+        if (req.has_param("limit")) {
+            limit = std::stoul(req.get_param_value("limit"));
+        }
+        if (req.has_param("clear")) {
+            clear = req.get_param_value("clear") == "true" || req.get_param_value("clear") == "1";
+        }
+        
+        auto messages = app_->get_console_messages(limit, clear);
+        
+        json messages_array = json::array();
+        for (const auto& msg : messages) {
+            messages_array.push_back({
+                {"level", msg.level},
+                {"message", msg.message},
+                {"source", msg.source},
+                {"line", msg.line},
+                {"timestamp", msg.timestamp}
+            });
+        }
+        
+        json response = {
+            {"count", messages.size()},
+            {"total", app_->get_console_message_count()},
+            {"messages", messages_array}
+        };
+        
+        res.set_content(response.dump(2), "application/json");
+    });
+    
+    // DELETE /console - Clear console messages
+    server_->Delete("/console", [this, add_cors](const httplib::Request&, httplib::Response& res) {
+        add_cors(res);
+        
+        app_->clear_console_messages();
+        
+        json response = {{"success", true}};
+        res.set_content(response.dump(), "application/json");
     });
     
     // GET / - Control Panel GUI

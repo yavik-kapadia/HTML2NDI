@@ -12,13 +12,19 @@ void CefAppImpl::OnBeforeCommandLineProcessing(
     const CefString& process_type,
     CefRefPtr<CefCommandLine> command_line) {
     
-    // Disable GPU when running headless
-    command_line->AppendSwitch("disable-gpu");
+    // For off-screen rendering, software compositing is faster because it
+    // avoids GPU→CPU readback latency. However, we can still use GPU for
+    // certain operations like WebGL and video decoding.
     command_line->AppendSwitch("disable-gpu-compositing");
     
-    // Off-screen rendering optimizations
-    command_line->AppendSwitch("enable-begin-frame-scheduling");
-    command_line->AppendSwitch("disable-surfaces");
+    // Enable GPU rasterization for complex CSS/SVG (runs on GPU, composites on CPU)
+    command_line->AppendSwitch("enable-gpu-rasterization");
+    
+    // Use Metal for WebGL content
+    command_line->AppendSwitchWithValue("use-angle", "metal");
+    
+    // Enable hardware video decoding for video elements
+    command_line->AppendSwitch("enable-accelerated-video-decode");
     
     // Disable features we don't need
     command_line->AppendSwitch("disable-extensions");
@@ -29,13 +35,24 @@ void CefAppImpl::OnBeforeCommandLineProcessing(
     // Use mock keychain to avoid macOS Keychain permission prompts
     command_line->AppendSwitch("use-mock-keychain");
     
-    // Audio capture for potential NDI audio
-    command_line->AppendSwitch("autoplay-policy=no-user-gesture-required");
+    // Video/Audio playback settings - aggressive autoplay
+    command_line->AppendSwitchWithValue("autoplay-policy", "no-user-gesture-required");
+    command_line->AppendSwitch("enable-media-stream");
+    command_line->AppendSwitch("allow-running-insecure-content");
+    
+    // Force enable all media features
+    command_line->AppendSwitch("disable-gesture-requirement-for-media-playback");
+    command_line->AppendSwitch("enable-features=PlatformHEVCDecoderSupport");
+    command_line->AppendSwitchWithValue("disable-features", "AudioServiceOutOfProcess,MediaEngagementBypassAutoplayPolicies");
+    
+    // Disable CORS restrictions (useful for local development)
+    command_line->AppendSwitch("disable-web-security");
+    command_line->AppendSwitch("disable-site-isolation-trials");
     
     // Reduce logging noise
     command_line->AppendSwitchWithValue("log-severity", "warning");
     
-    LOG_DEBUG("CEF command line configured for process: %s", 
+    LOG_DEBUG("CEF command line configured for process: %s (hybrid GPU/CPU)", 
               process_type.ToString().c_str());
 }
 

@@ -87,6 +87,11 @@ public:
      * Check if CEF is initialized.
      */
     bool is_initialized() const { return initialized_; }
+    
+    /**
+     * Get the CEF handler for advanced operations.
+     */
+    CefHandler* handler() const { return handler_.get(); }
 
 private:
     Config config_;

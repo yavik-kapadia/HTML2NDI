@@ -115,6 +115,41 @@ public:
      * Get frame statistics.
      */
     FrameStats get_frame_stats() const;
+    
+    /**
+     * Execute JavaScript in the browser.
+     * @param code JavaScript code to execute
+     */
+    void execute_javascript(const std::string& code);
+    
+    /**
+     * Console message structure.
+     */
+    struct ConsoleMessage {
+        std::string level;
+        std::string message;
+        std::string source;
+        int line;
+        int64_t timestamp;
+    };
+    
+    /**
+     * Get console messages from the browser.
+     * @param max_count Maximum number of messages (0 = all)
+     * @param clear Whether to clear messages after retrieval
+     * @return Vector of console messages
+     */
+    std::vector<ConsoleMessage> get_console_messages(size_t max_count = 0, bool clear = false);
+    
+    /**
+     * Clear console messages.
+     */
+    void clear_console_messages();
+    
+    /**
+     * Get console message count.
+     */
+    size_t get_console_message_count() const;
 
 private:
     Config config_;

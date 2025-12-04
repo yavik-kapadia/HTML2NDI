@@ -13,7 +13,7 @@ namespace html2ndi {
 
 namespace {
 
-const char* VERSION = "1.3.0";
+const char* VERSION = "1.4.0";
 
 void print_arg(const char* short_opt, const char* long_opt, 
                const char* arg, const char* desc) {
@@ -63,6 +63,7 @@ void Config::print_help(const char* program_name) {
     print_arg(nullptr, "--cache-path", "<path>", "Browser cache directory");
     print_arg(nullptr, "--disable-gpu", nullptr, "Disable GPU acceleration");
     print_arg(nullptr, "--user-agent", "<ua>", "Custom user agent string");
+    print_arg(nullptr, "--devtools-port", "<port>", "Enable Chrome DevTools on port (0=disabled)");
     
     std::cout << std::endl;
     std::cout << "Application Options:" << std::endl;
@@ -179,6 +180,11 @@ std::optional<Config> Config::parse(int argc, char* argv[]) {
         }
         else if (arg == "--user-agent") {
             config.cef_user_agent = get_value();
+        }
+        else if (arg == "--devtools-port") {
+            int val = get_int();
+            if (val < 0 || val > 65535) return std::nullopt;
+            config.devtools_port = val;
         }
         
         // Application options

@@ -33,6 +33,7 @@ struct Config {
     bool cef_disable_gpu = false;
     std::string cef_user_agent = "";
     int cef_log_severity = 2; // WARNING
+    int devtools_port = 0; // 0 = disabled
     
     // Application settings
     std::string log_file = "";
