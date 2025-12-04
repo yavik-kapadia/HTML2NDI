@@ -93,13 +93,14 @@ class StreamInstance: ObservableObject, Identifiable {
                 self?.startStatusPolling()
             }
             
-            print("Started stream '\(config.name)' on port \(httpPort)")
+            logInfo("Started stream '\(config.name)' on port \(httpPort)")
         } catch {
-            print("Failed to start stream: \(error)")
+            logError("Failed to start stream: \(error)")
         }
     }
     
     func stop() {
+        logInfo("Stopping stream '\(config.name)'")
         statusTimer?.invalidate()
         process?.terminate()
         process = nil
@@ -225,17 +226,22 @@ class StreamManager: ObservableObject {
     }
     
     func loadStreams() {
+        logInfo("Loading streams from: \(configPath.path)")
+        
         guard let data = try? Data(contentsOf: configPath),
               let configs = try? JSONDecoder().decode([StreamConfig].self, from: data) else {
+            logInfo("No saved streams found, creating default")
             // Create default stream if none exist
             addStream(StreamConfig(name: "Default", url: "about:blank", ndiName: "HTML2NDI"))
             return
         }
         
         streams = configs.map { StreamInstance(config: $0) }
+        logInfo("Loaded \(streams.count) stream(s)")
         
         // Auto-start streams
         for stream in streams where stream.config.autoStart {
+            logInfo("Auto-starting stream '\(stream.config.name)'")
             stream.start(workerPath: workerPath)
         }
     }
@@ -243,17 +249,24 @@ class StreamManager: ObservableObject {
     func saveStreams() {
         let configs = streams.map { $0.config }
         if let data = try? JSONEncoder().encode(configs) {
-            try? data.write(to: configPath)
+            do {
+                try data.write(to: configPath)
+                logDebug("Saved \(configs.count) stream(s) to config")
+            } catch {
+                logError("Failed to save streams: \(error)")
+            }
         }
     }
     
     func addStream(_ config: StreamConfig = StreamConfig()) {
+        logInfo("Adding stream '\(config.name)' with NDI name '\(config.ndiName)'")
         let instance = StreamInstance(config: config)
         streams.append(instance)
         saveStreams()
     }
     
     func removeStream(_ stream: StreamInstance) {
+        logInfo("Removing stream '\(stream.config.name)'")
         stream.stop()
         streams.removeAll { $0.id == stream.id }
         saveStreams()

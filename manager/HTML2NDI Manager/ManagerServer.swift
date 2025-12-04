@@ -26,7 +26,7 @@ class ManagerServer {
         // Create socket
         serverSocket = socket(AF_INET, SOCK_STREAM, 0)
         guard serverSocket >= 0 else {
-            print("Failed to create socket")
+            logError("Failed to create socket")
             return
         }
         
@@ -49,19 +49,19 @@ class ManagerServer {
         }
         
         guard bindResult == 0 else {
-            print("Failed to bind to port \(port): \(String(cString: strerror(errno)))")
+            logError("Failed to bind to port \(port): \(String(cString: strerror(errno)))")
             Darwin.close(serverSocket)
             return
         }
         
         // Listen
         guard listen(serverSocket, 10) == 0 else {
-            print("Failed to listen")
+            logError("Failed to listen on socket")
             Darwin.close(serverSocket)
             return
         }
         
-        print("Manager server listening on port \(port)")
+        logInfo("Manager server listening on port \(port)")
         isRunning = true
         
         // Accept loop

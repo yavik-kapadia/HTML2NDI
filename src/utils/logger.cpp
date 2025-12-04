@@ -13,11 +13,42 @@
 #include <sstream>
 #include <unistd.h>
 
+#ifdef __APPLE__
+#include <pwd.h>
+#include <sys/types.h>
+#endif
+
 namespace html2ndi {
+
+std::string get_default_log_directory() {
+#ifdef __APPLE__
+    // Get home directory
+    const char* home = getenv("HOME");
+    if (!home) {
+        struct passwd* pw = getpwuid(getuid());
+        if (pw) {
+            home = pw->pw_dir;
+        }
+    }
+    if (home) {
+        std::string log_dir = std::string(home) + "/Library/Logs/HTML2NDI";
+        std::filesystem::create_directories(log_dir);
+        return log_dir;
+    }
+#endif
+    return "";
+}
 
 Logger& Logger::instance() {
     static Logger instance;
     return instance;
+}
+
+Logger::Logger() {
+#ifdef __APPLE__
+    // Create os_log handle for Console.app integration
+    os_log_ = os_log_create("com.html2ndi.worker", "general");
+#endif
 }
 
 Logger::~Logger() {
@@ -137,7 +168,42 @@ void Logger::vlog(LogLevel level, const char* format, va_list args) {
             file_ << line << std::endl;
             rotate_file_if_needed();
         }
+        
+        // Output to macOS unified logging (Console.app)
+        log_to_os(level, message);
     }
+}
+
+void Logger::log_to_os(LogLevel level, const char* message) {
+#ifdef __APPLE__
+    if (!os_log_) return;
+    
+    os_log_type_t log_type;
+    switch (level) {
+        case LogLevel::DEBUG:
+            log_type = OS_LOG_TYPE_DEBUG;
+            break;
+        case LogLevel::INFO:
+            log_type = OS_LOG_TYPE_INFO;
+            break;
+        case LogLevel::WARNING:
+            log_type = OS_LOG_TYPE_DEFAULT;
+            break;
+        case LogLevel::ERROR:
+            log_type = OS_LOG_TYPE_ERROR;
+            break;
+        case LogLevel::FATAL:
+            log_type = OS_LOG_TYPE_FAULT;
+            break;
+        default:
+            log_type = OS_LOG_TYPE_DEFAULT;
+    }
+    
+    os_log_with_type(os_log_, log_type, "%{public}s", message);
+#else
+    (void)level;
+    (void)message;
+#endif
 }
 
 void Logger::flush() {

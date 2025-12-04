@@ -29,11 +29,22 @@ int main(int argc, char* argv[]) {
         return EXIT_FAILURE;
     }
     
-    // Initialize logger
+    // Initialize logger with default log directory if not specified
     LogLevel log_level = static_cast<LogLevel>(config->log_level);
-    Logger::instance().initialize(log_level, config->log_file);
+    std::string log_file = config->log_file;
+    if (log_file.empty()) {
+        // Default to ~/Library/Logs/HTML2NDI/html2ndi.log
+        std::string log_dir = get_default_log_directory();
+        if (!log_dir.empty()) {
+            log_file = log_dir + "/html2ndi.log";
+        }
+    }
+    Logger::instance().initialize(log_level, log_file);
     
     LOG_INFO("HTML2NDI starting...");
+    if (!log_file.empty()) {
+        LOG_INFO("Log file: %s", log_file.c_str());
+    }
     LOG_INFO("URL: %s", config->url.c_str());
     LOG_INFO("Resolution: %dx%d @ %d fps", config->width, config->height, config->fps);
     LOG_INFO("NDI Source: %s", config->ndi_name.c_str());

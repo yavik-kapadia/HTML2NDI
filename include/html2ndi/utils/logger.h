@@ -6,7 +6,17 @@
 #include <mutex>
 #include <string>
 
+#ifdef __APPLE__
+#include <os/log.h>
+#endif
+
 namespace html2ndi {
+
+/**
+ * Get the default log directory for macOS.
+ * Returns ~/Library/Logs/HTML2NDI/
+ */
+std::string get_default_log_directory();
 
 /**
  * Log severity levels.
@@ -60,7 +70,7 @@ public:
     void flush();
 
 private:
-    Logger() = default;
+    Logger();
     ~Logger();
     
     // Non-copyable
@@ -69,6 +79,7 @@ private:
     
     void write_to_file(const std::string& message);
     void rotate_file_if_needed();
+    void log_to_os(LogLevel level, const char* message);
     
     LogLevel level_{LogLevel::INFO};
     std::string file_path_;
@@ -77,6 +88,10 @@ private:
     
     size_t max_file_size_{10 * 1024 * 1024}; // 10MB
     int max_files_{5};
+    
+#ifdef __APPLE__
+    os_log_t os_log_{nullptr};
+#endif
 };
 
 // Convenience macros

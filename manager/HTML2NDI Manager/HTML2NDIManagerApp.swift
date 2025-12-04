@@ -42,8 +42,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // Start the manager HTTP server
         ManagerServer.shared.start()
         
-        print("HTML2NDI Manager started")
-        print("Dashboard: http://localhost:8080")
+        logInfo("HTML2NDI Manager started")
+        logInfo("Dashboard: http://localhost:8080")
     }
     
     func applicationWillTerminate(_ notification: Notification) {
