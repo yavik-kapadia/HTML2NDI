@@ -2,193 +2,362 @@
 
 **Render HTML pages as NDI video output on macOS**
 
-HTML2NDI is a native macOS application that loads an HTML page using Chromium Embedded Framework (CEF) in off-screen mode and publishes the rendered frames as NDI video. It runs as a headless daemon controllable via CLI flags and a REST API.
+HTML2NDI is a native macOS application that loads HTML pages using Chromium Embedded Framework (CEF) in off-screen mode and publishes the rendered frames as NDI video. It includes a menu bar manager app for controlling multiple streams.
 
 ---
 
-## 🏗 Architecture
+## Table of Contents
+
+- [Overview](#overview)
+- [Features](#features)
+- [Requirements](#requirements)
+- [Environment Setup](#environment-setup)
+- [Building the Project](#building-the-project)
+- [Running the Application](#running-the-application)
+- [Web Dashboard](#web-dashboard)
+- [HTTP Control API](#http-control-api)
+- [Configuration](#configuration)
+- [Troubleshooting](#troubleshooting)
+- [Project Structure](#project-structure)
+- [License](#license)
+
+---
+
+## Overview
+
+HTML2NDI consists of two components:
+
+1. **html2ndi** (C++) - Worker process that renders HTML to NDI video
+2. **HTML2NDI Manager** (Swift) - Menu bar app for managing multiple streams
+
+### Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                         HTML2NDI                                │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                 │
-│   ┌─────────────┐     ┌──────────────┐     ┌──────────────┐    │
-│   │   CEF       │     │  Frame Pump  │     │  NDI Sender  │    │
-│   │  Renderer   │────▶│  (Buffering) │────▶│  (libndi)    │────┼──▶ NDI Network
-│   │  (OSR)      │     │              │     │              │    │
-│   └─────────────┘     └──────────────┘     └──────────────┘    │
-│         ▲                                                       │
-│         │                                                       │
-│   ┌─────┴─────────────────────────────────────────────────┐    │
-│   │                    HTTP Control API                    │    │
-│   │   /status  /seturl  /reload  /shutdown                │    │
-│   └───────────────────────────────────────────────────────┘    │
-│                                                                 │
-└─────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────┐
+│                        HTML2NDI Manager (Swift)                         │
+│                     Menu Bar App + Web Dashboard                        │
+├─────────────────────────────────────────────────────────────────────────┤
+│                                                                         │
+│   ┌─────────────────┐   ┌─────────────────┐   ┌─────────────────┐      │
+│   │  html2ndi       │   │  html2ndi       │   │  html2ndi       │      │
+│   │  Worker #1      │   │  Worker #2      │   │  Worker #N      │      │
+│   │                 │   │                 │   │                 │      │
+│   │  CEF → NDI      │   │  CEF → NDI      │   │  CEF → NDI      │      │
+│   └────────┬────────┘   └────────┬────────┘   └────────┬────────┘      │
+│            │                     │                     │                │
+│            ▼                     ▼                     ▼                │
+│      NDI Source #1         NDI Source #2         NDI Source #N         │
+│                                                                         │
+└─────────────────────────────────────────────────────────────────────────┘
 ```
 
-### Components
+---
 
-| Module | Description |
-|--------|-------------|
-| **CEF Renderer** | Off-screen Chromium browser that renders HTML/CSS/JS |
-| **Frame Pump** | Double-buffered frame delivery with timing control |
-| **NDI Sender** | NDI SDK wrapper for video frame transmission |
-| **HTTP Server** | REST API for runtime control |
-| **Application** | Coordination layer and lifecycle management |
+## Features
+
+- Multi-stream management via native macOS menu bar app
+- Web-based configuration dashboard
+- Live preview thumbnails for running streams
+- Configurable color space (Rec. 709, Rec. 2020, sRGB, Rec. 601)
+- Editable stream names and NDI source names
+- Auto-generated unique identifiers
+- HTTP control API per stream
+- 1920x1080 @ 60fps default resolution
+- Graceful shutdown and error handling
 
 ---
 
-## 📋 Requirements
+## Requirements
 
-### Build Requirements
-- macOS 11.0 (Big Sur) or later
-- Xcode Command Line Tools
-- CMake 3.21+
-- C++20 compatible compiler (Apple Clang 13+)
+### System Requirements
 
-### Runtime Requirements
-- [NDI SDK for macOS](https://ndi.video/for-developers/ndi-sdk/) (download required)
-- NDI Tools (optional, for testing with Studio Monitor)
+| Requirement | Version |
+|-------------|---------|
+| macOS | 13.0 (Ventura) or later |
+| Architecture | Apple Silicon (arm64) |
+| Xcode Command Line Tools | Latest |
+
+### Build Tools
+
+| Tool | Version | Installation |
+|------|---------|--------------|
+| CMake | 3.21+ | `brew install cmake` |
+| Ninja | Latest | `brew install ninja` |
+| Swift | 5.9+ | Included with Xcode |
+| librsvg | Latest | `brew install librsvg` (for icon generation) |
+
+### Required SDKs
+
+| SDK | Source |
+|-----|--------|
+| NDI SDK for macOS | https://ndi.video/download-ndi-sdk/ |
+| CEF (Chromium Embedded Framework) | Auto-downloaded during build |
 
 ---
 
-## 🔧 Building
+## Environment Setup
 
-### 1. Clone the Repository
+### Step 1: Install Homebrew (if not installed)
+
+```bash
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+```
+
+### Step 2: Install Build Tools
+
+```bash
+brew install cmake ninja librsvg
+```
+
+### Step 3: Install Xcode Command Line Tools
+
+```bash
+xcode-select --install
+```
+
+### Step 4: Install NDI SDK
+
+1. Download the NDI SDK from https://ndi.video/download-ndi-sdk/
+2. Run the installer package
+3. The SDK installs to `/Library/NDI SDK for Apple/`
+
+Verify the installation:
+
+```bash
+ls "/Library/NDI SDK for Apple/lib/macOS/"
+# Should show: libndi.dylib
+```
+
+### Step 5: Clone the Repository
 
 ```bash
 git clone https://github.com/yourusername/HTML2NDI.git
 cd HTML2NDI
 ```
 
-### 2. Install NDI SDK
+---
 
-Download the NDI SDK from [ndi.video](https://ndi.video/for-developers/ndi-sdk/) and install it:
+## Building the Project
 
-```bash
-# After downloading, the SDK is typically installed to:
-# /Library/NDI SDK for Apple/
+### Quick Build (Recommended)
 
-# Verify installation
-ls "/Library/NDI SDK for Apple/lib/macOS/"
-# Should show: libndi.dylib
-```
-
-### 3. Build
+Use the provided build script to build everything:
 
 ```bash
-# Create build directory
-mkdir build && cd build
-
-# Configure (downloads CEF automatically)
-cmake ..
-
-# Build
-cmake --build . -j$(sysctl -n hw.ncpu)
+cd manager
+./build.sh
 ```
 
-> **Note:** The first build will download CEF (~300MB) and build the wrapper library. This may take several minutes.
+This will:
+1. Build the C++ html2ndi worker
+2. Build the Swift manager app
+3. Create the complete app bundle
+
+### Manual Build
+
+#### Build the C++ Worker
+
+```bash
+# Create and enter build directory
+mkdir -p build && cd build
+
+# Configure with CMake
+cmake .. -G Ninja -DCMAKE_BUILD_TYPE=Release
+
+# Build (first build downloads CEF ~300MB)
+ninja
+```
+
+The first build will:
+- Download CEF automatically (~300MB)
+- Build the CEF wrapper library
+- Compile the html2ndi worker
+- Create the .app bundle with helper processes
+
+#### Build the Swift Manager
+
+```bash
+cd manager
+
+# Build with Swift Package Manager
+swift build -c release
+
+# Create the app bundle
+mkdir -p "build/HTML2NDI Manager.app/Contents/MacOS"
+mkdir -p "build/HTML2NDI Manager.app/Contents/Resources"
+
+# Copy executable
+cp ".build/release/HTML2NDI Manager" "build/HTML2NDI Manager.app/Contents/MacOS/"
+
+# Copy Info.plist
+cp "HTML2NDI Manager/Info.plist" "build/HTML2NDI Manager.app/Contents/"
+
+# Copy icon
+cp "Resources/AppIcon.icns" "build/HTML2NDI Manager.app/Contents/Resources/"
+
+# Copy worker app
+cp -R "../build/bin/html2ndi.app" "build/HTML2NDI Manager.app/Contents/Resources/"
+```
 
 ### Build Options
 
 | Option | Default | Description |
 |--------|---------|-------------|
-| `BUILD_UNIVERSAL` | ON | Build universal binary (x86_64 + arm64) |
-| `CMAKE_BUILD_TYPE` | Release | Build type (Debug, Release, RelWithDebInfo) |
-| `NDI_SDK_DIR` | auto | Path to NDI SDK if not in standard location |
+| `CMAKE_BUILD_TYPE` | Release | Build type (Debug, Release) |
+| `CMAKE_OSX_ARCHITECTURES` | arm64 | Target architecture |
+| `NDI_SDK_DIR` | auto | Custom NDI SDK path |
+
+Example with options:
 
 ```bash
-# Example: Debug build with custom NDI path
-cmake -DCMAKE_BUILD_TYPE=Debug -DNDI_SDK_DIR=/path/to/ndi ..
+cmake .. -G Ninja \
+  -DCMAKE_BUILD_TYPE=Debug \
+  -DNDI_SDK_DIR=/custom/path/to/ndi
+```
+
+### Verify the Build
+
+```bash
+# Check that the app bundle exists
+ls -la build/bin/html2ndi.app/Contents/MacOS/html2ndi
+
+# Check helper apps exist
+ls build/bin/html2ndi.app/Contents/Frameworks/
+
+# Check manager app
+ls manager/build/"HTML2NDI Manager.app"/Contents/MacOS/
 ```
 
 ---
 
-## 🚀 Usage
+## Running the Application
 
-### Basic Usage
+### Option 1: Using the Manager App (Recommended)
+
+Launch the manager app:
 
 ```bash
-# Render a webpage
-./build/bin/html2ndi --url https://example.com
+open manager/build/"HTML2NDI Manager.app"
+```
 
-# With custom resolution and framerate
-./build/bin/html2ndi --url https://mysite.com --width 1280 --height 720 --fps 30
+Or from the terminal:
 
-# Use the built-in test page
-./build/bin/html2ndi --url file://$(pwd)/resources/test.html
+```bash
+manager/build/"HTML2NDI Manager.app"/Contents/MacOS/"HTML2NDI Manager"
+```
+
+The manager will:
+- Appear in the menu bar
+- Start the web dashboard at http://localhost:8080
+- Auto-start any streams configured with auto-start enabled
+
+### Option 2: Using the CLI Wrapper
+
+For single-stream usage:
+
+```bash
+./html2ndi --url "https://example.com" --ndi-name "My Stream"
+```
+
+### Option 3: Direct Worker Execution
+
+```bash
+./build/bin/html2ndi.app/Contents/MacOS/html2ndi \
+  --url "https://example.com" \
+  --ndi-name "My Stream" \
+  --width 1920 \
+  --height 1080 \
+  --fps 60 \
+  --http-port 8080
 ```
 
 ### Command Line Options
 
 ```
-HTML Rendering Options:
-  -u, --url <url>           URL to load (default: about:blank)
-  -w, --width <pixels>      Frame width (default: 1920)
-  -h, --height <pixels>     Frame height (default: 1080)
-  -f, --fps <rate>          Target framerate (default: 60)
+HTML Rendering:
+  --url <url>              URL to render (required)
+  --width <pixels>         Frame width (default: 1920)
+  --height <pixels>        Frame height (default: 1080)
+  --fps <rate>             Target framerate (default: 60)
 
-NDI Options:
-  -n, --ndi-name <name>     NDI source name (default: HTML2NDI)
-  -g, --ndi-groups <groups> NDI groups, comma-separated (default: all)
-  --no-clock-video          Disable video clock timing
-  --no-clock-audio          Disable audio clock timing
+NDI Output:
+  --ndi-name <name>        NDI source name (default: HTML2NDI)
 
-HTTP API Options:
-  --http-host <host>        HTTP server bind address (default: 127.0.0.1)
-  -p, --http-port <port>    HTTP server port (default: 8080)
-  --no-http                 Disable HTTP server
+HTTP API:
+  --http-port <port>       HTTP control port (default: 8080)
 
-Application Options:
-  -l, --log-file <path>     Log file path
-  -v, --verbose             Enable verbose logging (DEBUG level)
-  -q, --quiet               Quiet mode (ERROR level only)
-  -d, --daemon              Run as daemon (detach from terminal)
-  --version                 Print version and exit
-  --help                    Show help message
-```
-
-### Using the Helper Script
-
-```bash
-# Make executable
-chmod +x scripts/run.sh
-
-# Run with test page
-./scripts/run.sh --test
-
-# Run with custom settings
-./scripts/run.sh --url https://mysite.com --fps 30
+Advanced:
+  --cache-path <path>      CEF cache directory (required for multi-instance)
+  --verbose                Enable debug logging
 ```
 
 ---
 
-## 🌐 HTTP Control API
+## Web Dashboard
 
-When running, HTML2NDI exposes a REST API for control:
+Access the dashboard at http://localhost:8080 when the manager is running.
+
+### Dashboard Features
+
+- View all configured streams
+- Start/stop individual streams or all at once
+- Edit stream name, NDI source name, and URL
+- View live preview thumbnails
+- Monitor FPS and connection count
+- Add new streams with custom settings
+- Delete streams
+
+### Stream Configuration
+
+Each stream can be configured with:
+
+| Setting | Description | Default |
+|---------|-------------|---------|
+| Stream Name | Internal identifier | Auto-generated UUID |
+| NDI Source Name | Name visible in NDI receivers | Auto-generated |
+| URL | HTML page to render | about:blank |
+| Width | Frame width in pixels | 1920 |
+| Height | Frame height in pixels | 1080 |
+| FPS | Target framerate | 60 |
+| Color Preset | Color space setting | Rec. 709 |
+| Auto-start | Start on manager launch | false |
+
+---
+
+## HTTP Control API
+
+Each worker exposes a REST API on its configured port.
 
 ### Endpoints
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/` | GET | HTML info page |
-| `/status` | GET | JSON status (URL, resolution, FPS, connections) |
-| `/seturl` | POST | Load new URL: `{"url": "https://..."}` |
+| `/status` | GET | Current state (URL, FPS, connections, color settings) |
+| `/seturl` | POST | Navigate to new URL: `{"url": "..."}` |
 | `/reload` | POST | Reload current page |
 | `/shutdown` | POST | Graceful shutdown |
+| `/thumbnail` | GET | JPEG preview (params: `width`, `quality`) |
+| `/color` | GET | Current color space settings |
+| `/color` | POST | Set color space: `{"preset": "rec709"}` |
 
 ### Examples
 
 ```bash
-# Get current status
+# Get status
 curl http://localhost:8080/status
 
-# Load a new URL
+# Load new URL
 curl -X POST http://localhost:8080/seturl \
   -H "Content-Type: application/json" \
   -d '{"url": "https://example.com"}'
+
+# Get thumbnail
+curl http://localhost:8080/thumbnail?width=320 -o preview.jpg
+
+# Set color space
+curl -X POST http://localhost:8080/color \
+  -H "Content-Type: application/json" \
+  -d '{"preset": "rec709"}'
 
 # Reload page
 curl -X POST http://localhost:8080/reload
@@ -197,197 +366,183 @@ curl -X POST http://localhost:8080/reload
 curl -X POST http://localhost:8080/shutdown
 ```
 
+### Color Space Presets
+
+| Preset | Color Space | Gamma | Range |
+|--------|-------------|-------|-------|
+| `rec709` | Rec. 709 | Rec. 709 | Full |
+| `rec2020` | Rec. 2020 | Rec. 2020 | Full |
+| `srgb` | sRGB | sRGB | Full |
+| `rec601` | Rec. 601 | Rec. 601 | Full |
+
 ---
 
-## 🔄 Running as a Service
+## Configuration
 
-### Using launchd (Recommended)
+### Configuration Storage
 
-1. Install the LaunchAgent:
+Stream configurations are stored in:
 
-```bash
-cp resources/com.html2ndi.plist ~/Library/LaunchAgents/
-
-# Edit the plist to configure your settings
-nano ~/Library/LaunchAgents/com.html2ndi.plist
+```
+~/Library/Application Support/HTML2NDI/streams.json
 ```
 
-2. Load the agent:
+### CEF Cache
 
-```bash
-launchctl load ~/Library/LaunchAgents/com.html2ndi.plist
+Each stream uses a unique cache directory:
+
 ```
-
-3. Control the service:
-
-```bash
-# Stop
-launchctl stop com.html2ndi
-
-# Start
-launchctl start com.html2ndi
-
-# Unload (disable)
-launchctl unload ~/Library/LaunchAgents/com.html2ndi.plist
+~/Library/Caches/HTML2NDI/<stream-uuid>/
 ```
 
 ### Logs
 
-When running as a service, logs are written to:
-- `/var/log/html2ndi/html2ndi.log` - Application log
-- `/var/log/html2ndi/stdout.log` - Standard output
-- `/var/log/html2ndi/stderr.log` - Standard error
+Application logs are written to:
+
+```
+~/Library/Logs/html2ndi_debug.log
+```
 
 ---
 
-## 🧪 Testing with NDI Tools
+## Troubleshooting
 
-1. Download [NDI Tools](https://ndi.video/tools/) and install **NDI Studio Monitor**
+### CEF Fails to Initialize
 
-2. Start HTML2NDI:
-```bash
-./build/bin/html2ndi --url file://$(pwd)/resources/test.html
-```
+**Symptoms:** App crashes on startup, "Failed to initialize CEF" error
 
-3. Open NDI Studio Monitor - you should see "HTML2NDI" as an available source
+**Solutions:**
+1. Ensure the app bundle structure is complete:
+   ```bash
+   ls build/bin/html2ndi.app/Contents/Frameworks/
+   # Should show: Chromium Embedded Framework.framework and helper apps
+   ```
 
-4. The test page shows:
-   - Current time
-   - Frame counter
-   - FPS measurement
-   - Uptime
+2. Check helper apps exist:
+   ```bash
+   ls "build/bin/html2ndi.app/Contents/Frameworks/html2ndi Helper.app"
+   ```
 
----
+3. Rebuild from clean:
+   ```bash
+   rm -rf build && mkdir build && cd build
+   cmake .. -G Ninja && ninja
+   ```
 
-## 🐛 Troubleshooting
+### NDI Source Not Visible
 
-### CEF Sandbox Issues
+**Symptoms:** Stream runs but doesn't appear in NDI Studio Monitor
 
-On macOS, CEF subprocess may fail with sandbox errors. The application disables the sandbox by default (`no_sandbox = true`).
+**Solutions:**
+1. Verify NDI SDK is installed:
+   ```bash
+   ls "/Library/NDI SDK for Apple/lib/macOS/libndi.dylib"
+   ```
 
-If you encounter issues:
-```bash
-# Check if helper executable exists
-ls -la build/bin/html2ndi_helper
+2. Check firewall settings:
+   - System Settings > Network > Firewall
+   - Allow incoming connections for HTML2NDI
 
-# Ensure it's executable
-chmod +x build/bin/html2ndi_helper
-```
+3. Verify NDI library is linked:
+   ```bash
+   otool -L build/bin/html2ndi.app/Contents/MacOS/html2ndi | grep ndi
+   ```
 
-### Apple Silicon (M1/M2/M3)
+### Multiple Streams Fail to Start
 
-The build system automatically detects architecture. If you encounter issues:
+**Symptoms:** First stream works, additional streams crash
 
-```bash
-# Force arm64 build
-cmake -DCMAKE_OSX_ARCHITECTURES=arm64 ..
+**Solutions:**
+1. Ensure unique cache paths (manager handles this automatically)
+2. Ensure unique NDI names (manager auto-generates if duplicate)
+3. Check available ports (each stream needs a unique HTTP port)
 
-# Or force x86_64 (Rosetta)
-cmake -DCMAKE_OSX_ARCHITECTURES=x86_64 ..
-```
+### Keychain Permission Prompts
 
-### NDI Not Found
+**Symptoms:** macOS asks for keychain access repeatedly
 
-If NDI devices don't appear:
-
-1. Check NDI SDK installation:
-```bash
-ls "/Library/NDI SDK for Apple/lib/macOS/libndi.dylib"
-```
-
-2. Verify the library is loaded:
-```bash
-# Check linked libraries
-otool -L build/bin/html2ndi | grep ndi
-```
-
-3. Ensure NDI is allowed through firewall (System Preferences → Security & Privacy → Firewall)
+**Solution:** This should not happen with recent builds. If it does:
+1. The `--use-mock-keychain` flag is automatically added
+2. Rebuild the worker if using an old build
 
 ### High CPU Usage
 
-CEF rendering can be CPU-intensive. To reduce usage:
+**Solutions:**
+1. Lower framerate: `--fps 30`
+2. Lower resolution: `--width 1280 --height 720`
+3. Use simpler HTML content
+4. Disable unused streams
 
-```bash
-# Lower framerate
-./html2ndi --url https://example.com --fps 30
+### Preview Thumbnails Not Loading
 
-# Lower resolution  
-./html2ndi --url https://example.com --width 1280 --height 720
-```
+**Symptoms:** Dashboard shows broken image icons
 
-### Memory Issues
-
-For long-running instances with dynamic content:
-
-```bash
-# Use a cache directory to persist browser data
-./html2ndi --cache-path /tmp/html2ndi-cache --url https://example.com
-```
+**Solutions:**
+1. Wait a few seconds after starting (first frame takes time)
+2. Check worker is running: `curl http://localhost:<port>/status`
+3. Verify thumbnail endpoint: `curl http://localhost:<port>/thumbnail -o test.jpg`
 
 ---
 
-## 📁 Project Structure
+## Project Structure
 
 ```
 HTML2NDI/
-├── CMakeLists.txt          # Main CMake configuration
+├── .github/
+│   └── workflows/
+│       ├── build.yml           # CI build workflow
+│       └── release.yml         # Release workflow
 ├── cmake/
-│   ├── CEF.cmake           # CEF download and configuration
-│   └── NDI.cmake           # NDI SDK detection
+│   ├── CEF.cmake               # CEF download and configuration
+│   └── NDI.cmake               # NDI SDK detection
 ├── include/html2ndi/
-│   ├── application.h       # Main application class
-│   ├── config.h            # Configuration structure
-│   ├── cef/
-│   │   ├── cef_app.h       # CEF application
-│   │   ├── cef_handler.h   # Browser event handler
-│   │   └── offscreen_renderer.h
-│   ├── ndi/
-│   │   ├── ndi_sender.h    # NDI wrapper
-│   │   └── frame_pump.h    # Frame timing
-│   ├── http/
-│   │   └── http_server.h   # HTTP API
-│   └── utils/
-│       ├── logger.h        # Logging
-│       └── signal_handler.h
+│   ├── application.h           # Main application class
+│   ├── config.h                # Configuration structure
+│   ├── cef/                    # CEF wrapper headers
+│   ├── ndi/                    # NDI wrapper headers
+│   ├── http/                   # HTTP server headers
+│   └── utils/                  # Utility headers
 ├── src/
-│   ├── app/
-│   │   ├── main.cpp        # Entry point
-│   │   ├── config.cpp      # CLI parsing
-│   │   └── application.cpp
-│   ├── cef/
-│   │   ├── cef_app.cpp
-│   │   ├── cef_handler.cpp
-│   │   ├── cef_helper.cpp  # Subprocess
-│   │   └── offscreen_renderer.cpp
-│   ├── ndi/
-│   │   ├── ndi_sender.cpp
-│   │   └── frame_pump.cpp
-│   ├── http/
-│   │   └── http_server.cpp
-│   └── utils/
-│       ├── logger.cpp
-│       └── signal_handler.cpp
+│   ├── app/                    # Application entry and config
+│   ├── cef/                    # CEF implementation
+│   ├── ndi/                    # NDI implementation
+│   ├── http/                   # HTTP server implementation
+│   └── utils/                  # Utilities implementation
+├── manager/
+│   ├── HTML2NDI Manager/       # Swift source files
+│   │   ├── HTML2NDIManagerApp.swift
+│   │   ├── StreamManager.swift
+│   │   ├── ManagerServer.swift
+│   │   ├── MenuBarView.swift
+│   │   └── Info.plist
+│   ├── Resources/
+│   │   └── AppIcon.icns
+│   ├── Package.swift
+│   └── build.sh
 ├── resources/
-│   ├── test.html           # Test page
-│   └── com.html2ndi.plist  # LaunchAgent
-└── scripts/
-    ├── run.sh              # Runner script
-    ├── install.sh          # Installation script
-    └── uninstall.sh        # Uninstallation script
+│   ├── Info.plist              # Worker app Info.plist
+│   ├── helper-Info.plist       # Helper app template
+│   ├── control-panel.html      # Worker control panel
+│   └── test.html               # Test page
+├── CMakeLists.txt              # Main CMake configuration
+├── AGENTS.md                   # Project specification
+├── README.md                   # This file
+├── AppIcon.icns                # App icon
+└── html2ndi                    # CLI wrapper script
 ```
 
 ---
 
-## 📄 License
+## License
 
 MIT License - See LICENSE file for details.
 
 ---
 
-## 🙏 Acknowledgments
+## Acknowledgments
 
 - [Chromium Embedded Framework (CEF)](https://bitbucket.org/chromiumembedded/cef)
 - [NDI SDK](https://ndi.video/)
 - [cpp-httplib](https://github.com/yhirose/cpp-httplib)
 - [nlohmann/json](https://github.com/nlohmann/json)
-
+- [stb_image_write](https://github.com/nothings/stb)
