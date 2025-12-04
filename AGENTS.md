@@ -1,136 +1,206 @@
-# Tractus.HtmlToNdi — Native macOS Port (CEF + NDI)  
-**Cursor Project Specification**
+# HTML2NDI — Native macOS Application (CEF + NDI)
+**Project Specification**
 
 ## Overview
-Create a **native macOS application** in **C++17/20** that loads an HTML page, renders it using **CEF in off-screen mode**, and publishes the resulting frames as **NDI video** via the **NDI Advanced SDK for macOS**.  
-The application should run as a **headless daemon** controlled through CLI flags and a small HTTP API.
+A **native macOS application** that loads HTML pages, renders them using **CEF in off-screen mode**, and publishes the resulting frames as **NDI video** via the **NDI Advanced SDK for macOS**.
+
+The project consists of two components:
+1. **html2ndi** — C++17/20 worker that renders HTML to NDI (runs as .app bundle)
+2. **HTML2NDI Manager** — Swift/SwiftUI menu bar app for managing multiple streams
 
 ---
 
 ## Project Architecture
+
+```
 /src
   /app        — main entrypoint, config, CLI parsing
   /cef        — CEF wrapper, off-screen rendering, frame callbacks
   /ndi        — NDI initialization and frame sending
-  /http       — lightweight control API (/seturl, /status)
-  /utils      — logging, threading, helpers
-/include
-/cmake
-/build
+  /http       — lightweight control API
+  /utils      — logging, threading, image encoding, helpers
+/include      — header files
+/cmake        — CMake modules for CEF and NDI
+/manager      — Swift menu bar manager app
+  /HTML2NDI Manager  — SwiftUI source files
+/resources    — Info.plist, HTML templates, icons
+/.github/workflows — CI/CD for builds and releases
+```
 
-Use **CMake** to build and link against:
-- CEF (OSR mode)
-- NDI macOS SDK (`libndi.dylib`)
+Build system: **CMake** + **Swift Package Manager**
+
+Dependencies:
+- CEF (Chromium Embedded Framework) — off-screen rendering
+- NDI macOS SDK (`libndi.dylib`) — video output
+- `cpp-httplib` — HTTP server (header-only)
+- `nlohmann/json` — JSON parsing (header-only)
+- `stb_image_write` — JPEG encoding for thumbnails
 
 ---
 
 ## Functional Requirements
 
 ### 1. HTML Rendering (CEF Off-Screen Mode)
-- Run CEF with no visible window.
-- Implement `OnPaint` callback:
-  - Provide RGBA buffer for each new frame.
-  - Forward frame buffers to NDI sender thread.
-- Configurable options:
-  - `--url`
-  - `--width`, `--height`
-  - `--fps`
-- Disable VSync, control rendering rate manually.
+- Run CEF with no visible window in .app bundle structure
+- Implement `OnPaint` callback for BGRA frame capture
+- Forward frame buffers to NDI sender thread
+- CLI options:
+  - `--url` — source URL
+  - `--width`, `--height` — resolution (default: 1920x1080)
+  - `--fps` — target framerate (default: 60)
+  - `--ndi-name` — NDI source name
+  - `--http-port` — control API port
+  - `--cache-path` — unique CEF cache directory
 
 ### 2. NDI Video Output
-- Initialize NDI with `NDIlib_send_create()`.
-- Create and submit `NDIlib_video_frame_v2_t` frames:
-  - RGBA pixel format
-  - Matching CEF resolution
-  - Configurable framerate (`frame_rate_N` / `frame_rate_D`)
-- Gracefully handle dropped frames, reconnects, shutdown.
+- Initialize NDI with `NDIlib_send_create()`
+- Submit `NDIlib_video_frame_v2_t` frames with configurable:
+  - Color space (Rec. 709, Rec. 2020, sRGB, Rec. 601)
+  - Gamma mode
+  - Color range (full/limited)
+- Handle dropped frames gracefully
 
-### 3. Optional Audio Pipeline (Phase 2)
-- Capture PCM from WebAudio via CEF native extension or JS binding.
-- Create `NDIlib_audio_frame_v3_t`.
-- Sync audio with video timestamps when possible.
-
-### 4. HTTP Control API
-Implement JSON endpoints using `cpp-httplib`:
+### 3. HTTP Control API
+Endpoints provided by each worker instance:
 
 | Endpoint | Method | Description |
-|---------|--------|-------------|
-| `/status` | GET | Return JSON with current URL, fps, resolution, and NDI state |
-| `/seturl` | POST | `{ "url": "…" }` — reload CEF with new target |
-| `/reload` | POST | Manual page reload |
-| `/shutdown` | POST | Clean shutdown |
+|----------|--------|-------------|
+| `/status` | GET | Current URL, FPS, resolution, NDI connections, color settings |
+| `/seturl` | POST | `{ "url": "…" }` — navigate to new URL |
+| `/reload` | POST | Reload current page |
+| `/shutdown` | POST | Graceful shutdown |
+| `/thumbnail` | GET | JPEG preview image (`?width=320&quality=75`) |
+| `/color` | GET/POST | Get or set color space settings |
+
+### 4. Multi-Stream Manager (Swift)
+Menu bar application that:
+- Manages multiple html2ndi worker processes
+- Provides web-based dashboard at `http://localhost:8080`
+- Supports stream operations:
+  - Add/delete streams
+  - Start/stop individual or all streams
+  - Edit stream name, NDI name, URL
+  - Configure resolution, FPS, color preset
+- Live preview thumbnails for running streams
+- Auto-generates unique names if not provided
+- Persists configuration to `~/Library/Application Support/HTML2NDI/`
 
 ### 5. macOS Build Requirements
-- Build for `x86_64` and `arm64`.
-- Produce a single executable: `htmltondi-macos`.
-- Provide:
-  - `LaunchAgent` plist for background operation
-  - A `run.sh` helper script
-- Include CMake scripts to:
-  - Download/extract CEF
-  - Link against NDI
-  - Add RPATH correctly for `.dylib` files
+- Build for Apple Silicon (`arm64`)
+- Produce .app bundle: `html2ndi.app`
+- Manager app: `HTML2NDI Manager.app`
+- CEF helper processes in bundle (GPU, Renderer, Plugin, Alerts)
+- CMake scripts for:
+  - CEF download and extraction
+  - NDI SDK linking
+  - Proper RPATH for dylibs
+  - Helper app bundle generation
 
 ---
 
 ## Operational Expectations
-- Strong separation of concerns (CEF, NDI, HTTP, App).
-- RAII for all resources (CEF lifecycle, NDI sender, threads).
-- Avoid global state; use configuration structures.
-- Logging:
-  - stdout + rotating file logger
-- Kill handling:
-  - SIGTERM → graceful shutdown sequence
-- Robustness:
-  - Detect CEF subprocess crashes and automatically restart.
+- Strong separation of concerns (CEF, NDI, HTTP, App)
+- RAII for all resources
+- Thread-safe frame pump with double buffering
+- Logging to stdout and rotating file
+- SIGTERM handling for graceful shutdown
+- Unique CEF cache paths for multi-instance support
+- Mock keychain to avoid macOS permission prompts
 
 ---
 
-## Deliverables to Generate
-1. **Complete folder structure** with placeholder `.cpp` / `.h` files.  
-2. **CMakeLists.txt** with:
-   - CEF inclusion
-   - NDI linking
-   - Build targets for macOS ARM + Intel  
-3. Implementations for:
-   - `CefApp` and off-screen renderer  
-   - `NdiSender` wrapper  
-   - `FramePump`  
-   - `HttpServer`  
-   - `Config` + CLI parsing  
-4. Example test HTML file.  
-5. Production-ready README including:
-   - architecture diagrams  
-   - CMake build instructions  
-   - troubleshooting (CEF sandbox, Apple Silicon issues)  
-   - NDI validation steps with Studio Monitor  
-6. A minimal LaunchAgent plist for autostart.
+## Files Structure
+
+### Core Source Files
+- `src/app/main.cpp` — entry point
+- `src/app/application.cpp` — main coordinator
+- `src/cef/offscreen_renderer.cpp` — CEF initialization
+- `src/cef/cef_handler.cpp` — browser event handling
+- `src/ndi/ndi_sender.cpp` — NDI output
+- `src/ndi/frame_pump.cpp` — frame timing/delivery
+- `src/http/http_server.cpp` — control API
+- `src/utils/image_encode.cpp` — JPEG thumbnail encoding
+
+### Manager App (Swift)
+- `manager/HTML2NDI Manager/HTML2NDIManagerApp.swift` — app entry
+- `manager/HTML2NDI Manager/StreamManager.swift` — process management
+- `manager/HTML2NDI Manager/ManagerServer.swift` — dashboard HTTP server
+- `manager/HTML2NDI Manager/MenuBarView.swift` — menu bar UI
+
+---
+
+## Build & Run
+
+### Prerequisites
+```bash
+brew install cmake ninja librsvg
+# Install NDI SDK from https://ndi.video/download-ndi-sdk/
+```
+
+### Build Worker
+```bash
+mkdir -p build && cd build
+cmake .. -G Ninja -DCMAKE_BUILD_TYPE=Release
+ninja
+```
+
+### Build Manager
+```bash
+cd manager
+swift build -c release
+./build.sh  # Creates complete app bundle
+```
+
+### Run
+Launch `HTML2NDI Manager.app` from Applications or:
+```bash
+./manager/build/"HTML2NDI Manager.app"/Contents/MacOS/"HTML2NDI Manager"
+```
+
+Open dashboard: `http://localhost:8080`
+
+---
+
+## CI/CD (GitHub Actions)
+
+### Workflows
+- `build.yml` — runs on push to main, builds and tests
+- `release.yml` — creates releases on version tags (`v*`)
+
+### Creating a Release
+```bash
+git tag v1.0.0
+git push origin v1.0.0
+```
+
+Produces:
+- `HTML2NDI-Manager-{version}-arm64.dmg`
+- `HTML2NDI-Manager-{version}-arm64.zip`
 
 ---
 
 ## Coding Guidelines
-- Prefer C++17 or C++20 features.
-- Follow Google C++ Style unless otherwise noted.
-- Use:
-  - `std::thread`
-  - `std::mutex`
-  - `std::unique_ptr` / `std::shared_ptr`
-  - `std::chrono`  
-- Avoid external dependencies beyond:
-  - CEF  
-  - NDI SDK  
-  - `cpp-httplib`  
-- Keep each subsystem completely isolated.
+- C++17/20 for worker, Swift 5.9+ for manager
+- Google C++ Style for C++ code
+- Use `std::thread`, `std::mutex`, smart pointers, `std::chrono`
+- Minimal external dependencies
+- Each subsystem isolated and testable
 
 ---
 
-## Stretch Goals (Optional)
-- Hot-reload templates for local HTML rendering.
-- FPS display overlay for diagnostics.
-- Local MJPEG preview server.
-- Load balancing to multiple NDI outputs.
+## Implemented Features (Beyond Original Spec)
+- ✅ Multi-stream management via native menu bar app
+- ✅ Web-based configuration dashboard
+- ✅ Live preview thumbnails (JPEG)
+- ✅ Configurable color space presets
+- ✅ Editable stream/NDI names
+- ✅ Auto-generated unique identifiers
+- ✅ GitHub Actions CI/CD
+- ✅ Custom app icon
 
----
-
-## Final Output
-Cursor should create a **ready-to-build macOS C++ project** following this spec, with compile-ready code, proper linking, and documentation.
+## Future Enhancements
+- Audio pipeline (WebAudio → NDI audio)
+- Intel x86_64 support
+- Code signing and notarization
+- App Store distribution
+- Multiple NDI output formats
