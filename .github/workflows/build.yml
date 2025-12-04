@@ -25,25 +25,6 @@ jobs:
       run: |
         brew install cmake ninja
         
-    - name: Cache CEF
-      uses: actions/cache@v4
-      with:
-        path: build/cef
-        key: cef-${{ env.CEF_VERSION }}-macosarm64
-        
-    - name: Download CEF
-      run: |
-        mkdir -p build/cef
-        cd build/cef
-        
-        CEF_DIST="cef_binary_${CEF_VERSION}_macosarm64"
-        if [ ! -d "$CEF_DIST" ]; then
-          echo "Downloading CEF..."
-          curl -L "https://cef-builds.spotifycdn.com/${CEF_DIST}.tar.bz2" -o cef.tar.bz2
-          tar -xjf cef.tar.bz2
-          rm cef.tar.bz2
-        fi
-        
     - name: Configure AWS credentials (OIDC)
       uses: aws-actions/configure-aws-credentials@v4
       with:
@@ -60,9 +41,10 @@ jobs:
         
     - name: Build html2ndi
       run: |
+        mkdir -p build
         cd build
         cmake .. -G Ninja -DCMAKE_BUILD_TYPE=Release
-        ninja || echo "::warning::html2ndi build failed - NDI SDK may be missing"
+        ninja
         
     - name: Build Swift Manager
       run: |
