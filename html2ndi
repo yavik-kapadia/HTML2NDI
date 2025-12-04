@@ -1,0 +1,15 @@
+#!/bin/bash
+# HTML2NDI Launcher
+# Usage: ./html2ndi --url "http://example.com" [options]
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+APP_PATH="$SCRIPT_DIR/build/bin/html2ndi.app/Contents/MacOS/html2ndi"
+
+if [ ! -f "$APP_PATH" ]; then
+    echo "Error: html2ndi not built yet. Run:"
+    echo "  cd $SCRIPT_DIR && mkdir -p build && cd build && cmake .. && make -j8"
+    exit 1
+fi
+
+exec "$APP_PATH" "$@"
+

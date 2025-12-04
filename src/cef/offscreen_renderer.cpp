@@ -28,6 +28,14 @@ OffscreenRenderer::~OffscreenRenderer() {
 bool OffscreenRenderer::initialize() {
     LOG_DEBUG("Initializing CEF...");
     
+    // Load the CEF framework library at runtime (required on macOS)
+    CefScopedLibraryLoader library_loader;
+    if (!library_loader.LoadInMain()) {
+        LOG_ERROR("Failed to load CEF framework library");
+        return false;
+    }
+    LOG_DEBUG("CEF framework loaded");
+    
     // Get executable path
     char path[PATH_MAX];
     uint32_t size = sizeof(path);
@@ -40,9 +48,10 @@ bool OffscreenRenderer::initialize() {
     std::filesystem::path exe_dir = exe_path.parent_path(); // Contents/MacOS
     std::filesystem::path contents_dir = exe_dir.parent_path(); // Contents
     std::filesystem::path bundle_dir = contents_dir.parent_path(); // HTML2NDI.app
+    std::filesystem::path frameworks_dir = contents_dir / "Frameworks";
     
-    // Helper is in the same directory as main executable (Contents/MacOS)
-    std::filesystem::path helper_path = exe_dir / "html2ndi_helper";
+    // Helper app bundle is in Contents/Frameworks/html2ndi Helper.app
+    std::filesystem::path helper_path = frameworks_dir / "html2ndi Helper.app" / "Contents" / "MacOS" / "html2ndi Helper";
     
     // CEF settings
     CefSettings settings;
@@ -52,18 +61,11 @@ bool OffscreenRenderer::initialize() {
     settings.remote_debugging_port = 0; // Disable remote debugging
     settings.log_severity = static_cast<cef_log_severity_t>(config_.cef_log_severity);
     
-    // Set bundle paths
-    // Framework: Contents/Frameworks/
-    // Resources: Contents/Resources/
-    // Main bundle: HTML2NDI.app
-    CefString(&settings.framework_dir_path).FromString((contents_dir / "Frameworks").string());
-    CefString(&settings.resources_dir_path).FromString((contents_dir / "Resources").string());
-    CefString(&settings.locales_dir_path).FromString((contents_dir / "Resources").string());
+    // Only set main_bundle_path - let CefScopedLibraryLoader handle the rest
     CefString(&settings.main_bundle_path).FromString(bundle_dir.string());
     
     LOG_DEBUG("Bundle path: %s", bundle_dir.string().c_str());
-    LOG_DEBUG("Framework path: %s", (contents_dir / "Frameworks").string().c_str());
-    LOG_DEBUG("Resources path: %s", (contents_dir / "Resources").string().c_str());
+    LOG_DEBUG("Helper path: %s", helper_path.string().c_str());
     
     // Set subprocess path
     CefString(&settings.browser_subprocess_path).FromString(helper_path.string());

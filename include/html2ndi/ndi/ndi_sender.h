@@ -13,6 +13,28 @@
 namespace html2ndi {
 
 /**
+ * Color space configuration for NDI output.
+ */
+enum class ColorSpace {
+    Rec709,      // BT.709 (HD standard)
+    Rec2020,     // BT.2020 (UHD/HDR)
+    sRGB,        // sRGB (web standard)
+    Rec601       // BT.601 (SD legacy)
+};
+
+enum class GammaMode {
+    BT709,       // Standard broadcast gamma
+    BT2020,      // HDR gamma
+    sRGB,        // sRGB gamma (~2.2)
+    Linear       // Linear (1.0)
+};
+
+enum class ColorRange {
+    Full,        // 0-255 (PC/web)
+    Limited      // 16-235 (broadcast)
+};
+
+/**
  * NDI sender wrapper.
  * Handles NDI initialization and frame transmission.
  */
@@ -87,8 +109,30 @@ public:
      * Get the NDI source name.
      */
     const std::string& name() const { return name_; }
+    
+    /**
+     * Set color space settings.
+     */
+    void set_color_space(ColorSpace cs) { color_space_ = cs; update_metadata(); }
+    void set_gamma_mode(GammaMode gm) { gamma_mode_ = gm; update_metadata(); }
+    void set_color_range(ColorRange cr) { color_range_ = cr; update_metadata(); }
+    
+    /**
+     * Get current color settings.
+     */
+    ColorSpace color_space() const { return color_space_; }
+    GammaMode gamma_mode() const { return gamma_mode_; }
+    ColorRange color_range() const { return color_range_; }
+    
+    /**
+     * Get string representation of current settings.
+     */
+    std::string color_space_name() const;
+    std::string gamma_mode_name() const;
+    std::string color_range_name() const;
 
 private:
+    void update_metadata();
     std::string name_;
     std::string groups_;
     
@@ -104,6 +148,12 @@ private:
     // Audio frame buffer
     std::vector<float> audio_buffer_;
     NDIlib_audio_frame_v3_t audio_frame_{};
+    
+    // Color space settings
+    ColorSpace color_space_{ColorSpace::Rec709};
+    GammaMode gamma_mode_{GammaMode::BT709};
+    ColorRange color_range_{ColorRange::Full};
+    std::string color_metadata_;
 };
 
 } // namespace html2ndi

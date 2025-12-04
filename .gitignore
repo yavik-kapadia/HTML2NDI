@@ -29,3 +29,11 @@ cef_binary_*/
 *.tmp
 .cache/
 
+# Browser caches
+GPUCache/
+DawnCache/
+.playwright-mcp/
+
+# CEF crash reports
+Crashpad/
+

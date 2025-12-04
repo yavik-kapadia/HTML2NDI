@@ -15,7 +15,7 @@ endif()
 set(CMAKE_OSX_DEPLOYMENT_TARGET "11.0" CACHE STRING "Minimum macOS version")
 
 # Universal binary support (Intel + Apple Silicon)
-option(BUILD_UNIVERSAL "Build universal binary for x86_64 and arm64" ON)
+option(BUILD_UNIVERSAL "Build universal binary for x86_64 and arm64" OFF)
 if(BUILD_UNIVERSAL)
     set(CMAKE_OSX_ARCHITECTURES "x86_64;arm64" CACHE STRING "Build architectures")
 endif()
@@ -85,11 +85,41 @@ set(UTILS_SOURCES
     src/utils/signal_handler.cpp
 )
 
+# Helper sources
+set(HELPER_SOURCES
+    src/cef/cef_helper.cpp
+)
+
+# =============================================================================
+# Target names and paths
+# =============================================================================
+
+set(MAIN_TARGET "html2ndi")
+set(HELPER_TARGET "html2ndi_Helper")
+set(HELPER_OUTPUT_NAME "html2ndi Helper")
+
+# Output app bundle path
+set(APP_BUNDLE "${CMAKE_BINARY_DIR}/bin/${MAIN_TARGET}.app")
+set(APP_CONTENTS "${APP_BUNDLE}/Contents")
+set(APP_MACOS "${APP_CONTENTS}/MacOS")
+set(APP_FRAMEWORKS "${APP_CONTENTS}/Frameworks")
+set(APP_RESOURCES "${APP_CONTENTS}/Resources")
+
+# Helper app suffixes (CEF requirement for multi-process)
+# Format: "name suffix:target suffix:plist suffix"
+set(HELPER_APP_SUFFIXES
+    "::"
+    " (Alerts):_alerts:.alerts"
+    " (GPU):_gpu:.gpu"
+    " (Plugin):_plugin:.plugin"
+    " (Renderer):_renderer:.renderer"
+)
+
 # =============================================================================
 # Main Executable (macOS .app bundle)
 # =============================================================================
 
-add_executable(html2ndi MACOSX_BUNDLE
+add_executable(${MAIN_TARGET} MACOSX_BUNDLE
     ${APP_SOURCES}
     ${CEF_SOURCES}
     ${NDI_SOURCES}
@@ -97,13 +127,13 @@ add_executable(html2ndi MACOSX_BUNDLE
     ${UTILS_SOURCES}
 )
 
-target_include_directories(html2ndi PRIVATE
+target_include_directories(${MAIN_TARGET} PRIVATE
     ${CMAKE_SOURCE_DIR}/include
     ${CEF_INCLUDE_DIR}
     ${NDI_INCLUDE_DIR}
 )
 
-target_link_libraries(html2ndi PRIVATE
+target_link_libraries(${MAIN_TARGET} PRIVATE
     ${CEF_LIBRARIES}
     ${NDI_LIBRARIES}
     httplib::httplib
@@ -111,7 +141,7 @@ target_link_libraries(html2ndi PRIVATE
 )
 
 # macOS frameworks
-target_link_libraries(html2ndi PRIVATE
+target_link_libraries(${MAIN_TARGET} PRIVATE
     "-framework Cocoa"
     "-framework CoreFoundation"
     "-framework CoreGraphics"
@@ -121,7 +151,7 @@ target_link_libraries(html2ndi PRIVATE
 )
 
 # Bundle properties
-set_target_properties(html2ndi PROPERTIES
+set_target_properties(${MAIN_TARGET} PROPERTIES
     MACOSX_BUNDLE TRUE
     MACOSX_BUNDLE_INFO_PLIST "${CMAKE_SOURCE_DIR}/resources/Info.plist"
     MACOSX_BUNDLE_BUNDLE_NAME "HTML2NDI"
@@ -134,38 +164,106 @@ set_target_properties(html2ndi PROPERTIES
 )
 
 # =============================================================================
-# CEF Helper Executable (required for CEF subprocess)
+# CEF Helper App Bundles (required for CEF multi-process architecture)
 # =============================================================================
 
-add_executable(html2ndi_helper
-    src/cef/cef_helper.cpp
+foreach(_suffix_item ${HELPER_APP_SUFFIXES})
+    # Parse the suffix string (name:target:plist)
+    string(REPLACE ":" ";" _suffix_list "${_suffix_item}")
+    list(GET _suffix_list 0 _name_suffix)
+    list(GET _suffix_list 1 _target_suffix)
+    list(GET _suffix_list 2 _plist_suffix)
+    
+    # Define helper target and output names
+    set(_helper_target "${HELPER_TARGET}${_target_suffix}")
+    set(_helper_output_name "${HELPER_OUTPUT_NAME}${_name_suffix}")
+    
+    # Generate helper-specific Info.plist
+    set(_helper_plist "${CMAKE_BINARY_DIR}/helper-Info${_target_suffix}.plist")
+    file(READ "${CMAKE_SOURCE_DIR}/resources/helper-Info.plist" _plist_contents)
+    string(REPLACE "\${HELPER_NAME}" "${_helper_output_name}" _plist_contents "${_plist_contents}")
+    string(REPLACE "\${BUNDLE_ID_SUFFIX}" "${_plist_suffix}" _plist_contents "${_plist_contents}")
+    file(WRITE "${_helper_plist}" "${_plist_contents}")
+    
+    # Create helper executable as app bundle
+    add_executable(${_helper_target} MACOSX_BUNDLE ${HELPER_SOURCES})
+    
+    target_include_directories(${_helper_target} PRIVATE
+        ${CMAKE_SOURCE_DIR}/include
+        ${CEF_INCLUDE_DIR}
+    )
+    
+    target_link_libraries(${_helper_target} PRIVATE
+        ${CEF_LIBRARIES}
+    )
+    
+    set_target_properties(${_helper_target} PROPERTIES
+        MACOSX_BUNDLE TRUE
+        MACOSX_BUNDLE_INFO_PLIST "${_helper_plist}"
+        OUTPUT_NAME "${_helper_output_name}"
+        # RPATH to find CEF framework from helper's MacOS directory
+        # Path: html2ndi Helper.app/Contents/MacOS -> up 3 levels -> main Frameworks dir
+        INSTALL_RPATH "@executable_path/../../../;@executable_path/../Frameworks"
+        BUILD_WITH_INSTALL_RPATH TRUE
+        MACOSX_RPATH TRUE
+    )
+    
+    # Add helper as dependency of main target
+    add_dependencies(${MAIN_TARGET} ${_helper_target})
+    
+    # Copy helper app bundle to main app's Frameworks directory
+    # Use quotes to handle spaces and parentheses in names
+    add_custom_command(TARGET ${MAIN_TARGET} POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+            "${CMAKE_BINARY_DIR}/bin/${_helper_output_name}.app"
+            "${APP_FRAMEWORKS}/${_helper_output_name}.app"
+        # Create Frameworks symlink inside helper app pointing to main app's Frameworks
+        COMMAND ${CMAKE_COMMAND} -E make_directory
+            "${APP_FRAMEWORKS}/${_helper_output_name}.app/Contents/Frameworks"
+        COMMAND ${CMAKE_COMMAND} -E create_symlink
+            "../../../Chromium Embedded Framework.framework"
+            "${APP_FRAMEWORKS}/${_helper_output_name}.app/Contents/Frameworks/Chromium Embedded Framework.framework"
+        COMMENT "Copying and linking helper app: ${_helper_output_name}.app"
+        VERBATIM
+    )
+endforeach()
+
+# =============================================================================
+# Post-build: Setup .app bundle structure
+# =============================================================================
+
+# Copy CEF Framework to bundle
+add_custom_command(TARGET ${MAIN_TARGET} POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${APP_FRAMEWORKS}"
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        "${CEF_FRAMEWORK_DIR}"
+        "${APP_FRAMEWORKS}/Chromium Embedded Framework.framework"
+    COMMENT "Copying CEF framework to bundle..."
 )
 
-target_include_directories(html2ndi_helper PRIVATE
-    ${CMAKE_SOURCE_DIR}/include
-    ${CEF_INCLUDE_DIR}
+# Copy CEF Resources to bundle
+add_custom_command(TARGET ${MAIN_TARGET} POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${APP_RESOURCES}"
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        "${CEF_RESOURCES_DIR}"
+        "${APP_RESOURCES}"
+    COMMENT "Copying CEF resources to bundle..."
 )
 
-target_link_libraries(html2ndi_helper PRIVATE
-    ${CEF_LIBRARIES}
-)
-
-set_target_properties(html2ndi_helper PROPERTIES
-    INSTALL_RPATH "@executable_path;@executable_path/../Frameworks"
-    BUILD_WITH_INSTALL_RPATH TRUE
-    MACOSX_RPATH TRUE
+# Copy NDI library to Frameworks
+add_custom_command(TARGET ${MAIN_TARGET} POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy
+        "${NDI_LIBRARY}"
+        "${APP_FRAMEWORKS}/libndi.dylib"
+    COMMENT "Copying NDI library to bundle..."
 )
 
 # =============================================================================
 # Installation
 # =============================================================================
 
-install(TARGETS html2ndi
+install(TARGETS ${MAIN_TARGET}
     BUNDLE DESTINATION .
-    RUNTIME DESTINATION bin
-)
-
-install(TARGETS html2ndi_helper
     RUNTIME DESTINATION bin
 )
 
@@ -176,51 +274,6 @@ install(DIRECTORY ${CEF_FRAMEWORK_DIR}
 
 install(FILES ${NDI_LIBRARY}
     DESTINATION lib
-)
-
-# =============================================================================
-# Post-build: Setup .app bundle structure
-# =============================================================================
-
-# Get bundle paths
-set(BUNDLE_PATH "$<TARGET_BUNDLE_DIR:html2ndi>")
-set(BUNDLE_CONTENTS "${BUNDLE_PATH}/Contents")
-set(BUNDLE_MACOS "${BUNDLE_CONTENTS}/MacOS")
-set(BUNDLE_FRAMEWORKS "${BUNDLE_CONTENTS}/Frameworks")
-set(BUNDLE_RESOURCES "${BUNDLE_CONTENTS}/Resources")
-
-# Copy CEF Framework to bundle
-add_custom_command(TARGET html2ndi POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E make_directory "${BUNDLE_FRAMEWORKS}"
-    COMMAND ${CMAKE_COMMAND} -E copy_directory
-        "${CEF_FRAMEWORK_DIR}"
-        "${BUNDLE_FRAMEWORKS}/Chromium Embedded Framework.framework"
-    COMMENT "Copying CEF framework to bundle..."
-)
-
-# Copy CEF Resources to bundle
-add_custom_command(TARGET html2ndi POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E make_directory "${BUNDLE_RESOURCES}"
-    COMMAND ${CMAKE_COMMAND} -E copy_directory
-        "${CEF_RESOURCES_DIR}"
-        "${BUNDLE_RESOURCES}"
-    COMMENT "Copying CEF resources to bundle..."
-)
-
-# Copy NDI library to Frameworks
-add_custom_command(TARGET html2ndi POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy
-        "${NDI_LIBRARY}"
-        "${BUNDLE_FRAMEWORKS}/libndi.dylib"
-    COMMENT "Copying NDI library to bundle..."
-)
-
-# Copy helper to MacOS directory
-add_custom_command(TARGET html2ndi POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy
-        "$<TARGET_FILE:html2ndi_helper>"
-        "${BUNDLE_MACOS}/html2ndi_helper"
-    COMMENT "Copying helper to bundle..."
 )
 
 # =============================================================================
@@ -235,4 +288,3 @@ message(STATUS "Target architectures: ${CMAKE_OSX_ARCHITECTURES}")
 message(STATUS "CEF: ${CEF_VERSION}")
 message(STATUS "NDI: ${NDI_VERSION}")
 message(STATUS "")
-

@@ -82,6 +82,11 @@ public:
      * Get current FPS (actual rendered frames per second).
      */
     float current_fps() const;
+    
+    /**
+     * Get NDI sender for configuration.
+     */
+    NdiSender* ndi_sender() { return ndi_sender_.get(); }
 
 private:
     Config config_;

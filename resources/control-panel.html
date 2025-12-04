@@ -1,0 +1,613 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>HTML2NDI Control Panel</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        :root {
+            --bg-dark: #0a0a0f;
+            --bg-card: #12121a;
+            --bg-input: #1a1a24;
+            --accent: #6366f1;
+            --accent-glow: rgba(99, 102, 241, 0.3);
+            --success: #22c55e;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --text: #e4e4e7;
+            --text-dim: #71717a;
+            --border: #27272a;
+        }
+        
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+            background: var(--bg-dark);
+            color: var(--text);
+            min-height: 100vh;
+            background-image: 
+                radial-gradient(ellipse at top, rgba(99, 102, 241, 0.1) 0%, transparent 50%),
+                radial-gradient(ellipse at bottom right, rgba(139, 92, 246, 0.05) 0%, transparent 50%);
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+        
+        header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 2rem;
+            padding-bottom: 1.5rem;
+            border-bottom: 1px solid var(--border);
+        }
+        
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+        
+        .logo-icon {
+            width: 48px;
+            height: 48px;
+            background: linear-gradient(135deg, var(--accent), #8b5cf6);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            box-shadow: 0 4px 20px var(--accent-glow);
+        }
+        
+        h1 {
+            font-size: 1.75rem;
+            font-weight: 600;
+            background: linear-gradient(135deg, #fff, #a1a1aa);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        
+        .status-badge {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 1rem;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 9999px;
+            font-size: 0.875rem;
+        }
+        
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--success);
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            gap: 1.5rem;
+        }
+        
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 1.5rem;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        
+        .card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.3);
+        }
+        
+        .card-header {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            margin-bottom: 1.25rem;
+        }
+        
+        .card-icon {
+            width: 36px;
+            height: 36px;
+            background: var(--bg-input);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.1rem;
+        }
+        
+        .card-title {
+            font-size: 1rem;
+            font-weight: 600;
+            color: var(--text);
+        }
+        
+        .stat-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 1rem;
+        }
+        
+        .stat {
+            background: var(--bg-input);
+            padding: 1rem;
+            border-radius: 10px;
+        }
+        
+        .stat-label {
+            font-size: 0.75rem;
+            color: var(--text-dim);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 0.25rem;
+        }
+        
+        .stat-value {
+            font-family: 'SF Mono', 'Monaco', 'Inconsolata', monospace;
+            font-size: 1.25rem;
+            font-weight: 600;
+        }
+        
+        .stat-value.highlight { color: var(--accent); }
+        .stat-value.success { color: var(--success); }
+        
+        label {
+            display: block;
+            font-size: 0.875rem;
+            color: var(--text-dim);
+            margin-bottom: 0.5rem;
+        }
+        
+        input, select {
+            width: 100%;
+            padding: 0.75rem 1rem;
+            background: var(--bg-input);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            color: var(--text);
+            font-family: 'SF Mono', monospace;
+            font-size: 0.9rem;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+        
+        input:focus, select:focus {
+            outline: none;
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px var(--accent-glow);
+        }
+        
+        .input-group {
+            margin-bottom: 1rem;
+        }
+        
+        .btn-row {
+            display: flex;
+            gap: 0.75rem;
+            margin-top: 1rem;
+        }
+        
+        button {
+            flex: 1;
+            padding: 0.75rem 1.25rem;
+            border: none;
+            border-radius: 10px;
+            font-family: inherit;
+            font-size: 0.9rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, var(--accent), #8b5cf6);
+            color: white;
+            box-shadow: 0 4px 15px var(--accent-glow);
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 6px 20px var(--accent-glow);
+        }
+        
+        .btn-secondary {
+            background: var(--bg-input);
+            color: var(--text);
+            border: 1px solid var(--border);
+        }
+        
+        .btn-secondary:hover {
+            background: var(--border);
+        }
+        
+        .btn-danger {
+            background: var(--danger);
+            color: white;
+        }
+        
+        .btn-danger:hover {
+            background: #dc2626;
+        }
+        
+        .preset-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 0.75rem;
+            margin-bottom: 1rem;
+        }
+        
+        .preset-btn {
+            padding: 0.75rem;
+            background: var(--bg-input);
+            border: 2px solid var(--border);
+            border-radius: 10px;
+            color: var(--text);
+            font-size: 0.85rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-align: center;
+        }
+        
+        .preset-btn:hover {
+            border-color: var(--accent);
+            background: rgba(99, 102, 241, 0.1);
+        }
+        
+        .preset-btn.active {
+            border-color: var(--accent);
+            background: rgba(99, 102, 241, 0.2);
+        }
+        
+        .preset-btn small {
+            color: var(--text-dim);
+        }
+        
+        .toast {
+            position: fixed;
+            bottom: 2rem;
+            right: 2rem;
+            padding: 1rem 1.5rem;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4);
+            transform: translateY(100px);
+            opacity: 0;
+            transition: all 0.3s;
+            z-index: 1000;
+        }
+        
+        .toast.show {
+            transform: translateY(0);
+            opacity: 1;
+        }
+        
+        .toast.success { border-color: var(--success); }
+        .toast.error { border-color: var(--danger); }
+        
+        .advanced-toggle {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            color: var(--text-dim);
+            font-size: 0.85rem;
+            cursor: pointer;
+            margin-bottom: 1rem;
+            user-select: none;
+        }
+        
+        .advanced-toggle:hover { color: var(--text); }
+        
+        .advanced-settings {
+            display: none;
+        }
+        
+        .advanced-settings.show {
+            display: block;
+        }
+        
+        @media (max-width: 768px) {
+            .container { padding: 1rem; }
+            header { flex-direction: column; gap: 1rem; text-align: center; }
+            .stat-grid { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="logo">
+                <div class="logo-icon">N</div>
+                <div>
+                    <h1>HTML2NDI</h1>
+                    <div style="font-size: 0.85rem; color: var(--text-dim);">Control Panel</div>
+                </div>
+            </div>
+            <div class="status-badge">
+                <div class="status-dot" id="statusDot"></div>
+                <span id="statusText">Connecting...</span>
+            </div>
+        </header>
+        
+        <div class="grid">
+            <!-- Status Card -->
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-icon">i</div>
+                    <div class="card-title">Status</div>
+                </div>
+                <div class="stat-grid">
+                    <div class="stat">
+                        <div class="stat-label">NDI Source</div>
+                        <div class="stat-value highlight" id="ndiName">-</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-label">Connections</div>
+                        <div class="stat-value success" id="connections">0</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-label">Resolution</div>
+                        <div class="stat-value" id="resolution">-</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-label">FPS</div>
+                        <div class="stat-value" id="fps">-</div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- URL Control Card -->
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-icon">W</div>
+                    <div class="card-title">Source URL</div>
+                </div>
+                <div class="input-group">
+                    <label>Current URL</label>
+                    <input type="url" id="urlInput" placeholder="https://example.com/graphics.html">
+                </div>
+                <div class="btn-row">
+                    <button class="btn-primary" onclick="setUrl()">Load URL</button>
+                    <button class="btn-secondary" onclick="reload()">Reload</button>
+                </div>
+            </div>
+            
+            <!-- Color Settings Card -->
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-icon">C</div>
+                    <div class="card-title">Color Space</div>
+                </div>
+                <div class="preset-grid">
+                    <button class="preset-btn" onclick="setPreset('rec709')" id="preset-rec709">
+                        <strong>Rec. 709</strong><br>
+                        <small>HD Broadcast</small>
+                    </button>
+                    <button class="preset-btn" onclick="setPreset('rec2020')" id="preset-rec2020">
+                        <strong>Rec. 2020</strong><br>
+                        <small>UHD / HDR</small>
+                    </button>
+                    <button class="preset-btn" onclick="setPreset('srgb')" id="preset-srgb">
+                        <strong>sRGB</strong><br>
+                        <small>Web Standard</small>
+                    </button>
+                    <button class="preset-btn" onclick="setPreset('rec601')" id="preset-rec601">
+                        <strong>Rec. 601</strong><br>
+                        <small>SD Legacy</small>
+                    </button>
+                </div>
+                
+                <div class="advanced-toggle" onclick="toggleAdvanced()">
+                    <span id="advancedArrow">&#9654;</span> Advanced Settings
+                </div>
+                
+                <div class="advanced-settings" id="advancedSettings">
+                    <div class="input-group">
+                        <label>Colorimetry</label>
+                        <select id="colorspace">
+                            <option value="BT709">BT.709 (HD)</option>
+                            <option value="BT2020">BT.2020 (UHD)</option>
+                            <option value="sRGB">sRGB (Web)</option>
+                            <option value="BT601">BT.601 (SD)</option>
+                        </select>
+                    </div>
+                    <div class="input-group">
+                        <label>Gamma</label>
+                        <select id="gamma">
+                            <option value="BT709">BT.709</option>
+                            <option value="BT2020">BT.2020</option>
+                            <option value="sRGB">sRGB (~2.2)</option>
+                            <option value="Linear">Linear (1.0)</option>
+                        </select>
+                    </div>
+                    <div class="input-group">
+                        <label>Range</label>
+                        <select id="range">
+                            <option value="full">Full (0-255)</option>
+                            <option value="limited">Limited (16-235)</option>
+                        </select>
+                    </div>
+                    <button class="btn-primary" onclick="applyColorSettings()" style="width: 100%">Apply Settings</button>
+                </div>
+            </div>
+            
+            <!-- System Card -->
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-icon">S</div>
+                    <div class="card-title">System</div>
+                </div>
+                <div class="stat-grid" style="margin-bottom: 1rem;">
+                    <div class="stat">
+                        <div class="stat-label">Actual FPS</div>
+                        <div class="stat-value" id="actualFps">-</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-label">Color Mode</div>
+                        <div class="stat-value" id="colorMode" style="font-size: 0.9rem;">-</div>
+                    </div>
+                </div>
+                <button class="btn-danger" onclick="shutdown()" style="width: 100%">Shutdown</button>
+            </div>
+        </div>
+    </div>
+    
+    <div class="toast" id="toast"></div>
+    
+    <script>
+        async function fetchStatus() {
+            try {
+                const res = await fetch('/status');
+                const data = await res.json();
+                
+                document.getElementById('ndiName').textContent = data.ndi_name;
+                document.getElementById('connections').textContent = data.ndi_connections;
+                document.getElementById('resolution').textContent = data.width + 'x' + data.height;
+                document.getElementById('fps').textContent = data.fps;
+                document.getElementById('actualFps').textContent = (data.actual_fps || 0).toFixed(1);
+                document.getElementById('urlInput').value = data.url || '';
+                
+                if (data.color) {
+                    document.getElementById('colorspace').value = data.color.colorspace;
+                    document.getElementById('gamma').value = data.color.gamma;
+                    document.getElementById('range').value = data.color.range;
+                    document.getElementById('colorMode').textContent = data.color.colorspace;
+                    updatePresetHighlight(data.color);
+                }
+                
+                document.getElementById('statusDot').style.background = data.running ? 'var(--success)' : 'var(--danger)';
+                document.getElementById('statusText').textContent = data.running ? 'Running' : 'Stopped';
+            } catch (e) {
+                document.getElementById('statusDot').style.background = 'var(--danger)';
+                document.getElementById('statusText').textContent = 'Disconnected';
+            }
+        }
+        
+        function updatePresetHighlight(color) {
+            document.querySelectorAll('.preset-btn').forEach(function(b) { b.classList.remove('active'); });
+            
+            if (color.colorspace === 'BT709' && color.gamma === 'BT709' && color.range === 'full') {
+                document.getElementById('preset-rec709').classList.add('active');
+            } else if (color.colorspace === 'BT2020' && color.gamma === 'BT2020') {
+                document.getElementById('preset-rec2020').classList.add('active');
+            } else if (color.colorspace === 'sRGB' && color.gamma === 'sRGB') {
+                document.getElementById('preset-srgb').classList.add('active');
+            } else if (color.colorspace === 'BT601') {
+                document.getElementById('preset-rec601').classList.add('active');
+            }
+        }
+        
+        async function setUrl() {
+            var url = document.getElementById('urlInput').value;
+            if (!url) { showToast('Please enter a URL', 'error'); return; }
+            
+            try {
+                var res = await fetch('/seturl', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ url: url })
+                });
+                var data = await res.json();
+                showToast(data.success ? 'URL loaded!' : data.error, data.success ? 'success' : 'error');
+            } catch (e) {
+                showToast('Failed to set URL', 'error');
+            }
+        }
+        
+        async function reload() {
+            try {
+                await fetch('/reload', { method: 'POST' });
+                showToast('Page reloaded!', 'success');
+            } catch (e) {
+                showToast('Failed to reload', 'error');
+            }
+        }
+        
+        async function setPreset(preset) {
+            try {
+                var res = await fetch('/color', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ preset: preset })
+                });
+                var data = await res.json();
+                if (data.success) {
+                    showToast('Color preset: ' + preset.toUpperCase(), 'success');
+                    fetchStatus();
+                }
+            } catch (e) {
+                showToast('Failed to set preset', 'error');
+            }
+        }
+        
+        async function applyColorSettings() {
+            try {
+                var res = await fetch('/color', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        colorspace: document.getElementById('colorspace').value,
+                        gamma: document.getElementById('gamma').value,
+                        range: document.getElementById('range').value
+                    })
+                });
+                var data = await res.json();
+                showToast(data.success ? 'Color settings applied!' : data.error, data.success ? 'success' : 'error');
+                fetchStatus();
+            } catch (e) {
+                showToast('Failed to apply settings', 'error');
+            }
+        }
+        
+        async function shutdown() {
+            if (!confirm('Are you sure you want to shutdown HTML2NDI?')) return;
+            try {
+                await fetch('/shutdown', { method: 'POST' });
+                showToast('Shutting down...', 'success');
+            } catch (e) {
+                showToast('Failed to shutdown', 'error');
+            }
+        }
+        
+        function toggleAdvanced() {
+            var el = document.getElementById('advancedSettings');
+            var arrow = document.getElementById('advancedArrow');
+            el.classList.toggle('show');
+            arrow.innerHTML = el.classList.contains('show') ? '&#9660;' : '&#9654;';
+        }
+        
+        function showToast(msg, type) {
+            var toast = document.getElementById('toast');
+            toast.textContent = msg;
+            toast.className = 'toast ' + type + ' show';
+            setTimeout(function() { toast.classList.remove('show'); }, 3000);
+        }
+        
+        // Poll status every 2 seconds
+        fetchStatus();
+        setInterval(fetchStatus, 2000);
+        
+        // Enter key in URL input
+        document.getElementById('urlInput').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') setUrl();
+        });
+    </script>
+</body>
+</html>
+
