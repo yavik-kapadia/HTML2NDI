@@ -206,13 +206,19 @@ void HttpServer::setup_routes() {
         res.status = 204;
     });
     
-    // GET /status - Get current status
+    // GET /status - Get current status with full statistics
     server_->Get("/status", [this, add_cors](const httplib::Request&, httplib::Response& res) {
         add_cors(res);
         
         auto* ndi = app_->ndi_sender();
         std::string groups = app_->config().ndi_groups;
         if (groups.empty()) groups = "public";
+        
+        // Get tally state
+        auto tally = ndi->get_tally(0);
+        
+        // Get frame statistics
+        auto stats = app_->get_frame_stats();
         
         json status = {
             {"url", app_->current_url()},
@@ -221,9 +227,21 @@ void HttpServer::setup_routes() {
             {"fps", app_->config().fps},
             {"actual_fps", app_->current_fps()},
             {"ndi_name", app_->config().ndi_name},
+            {"ndi_source", ndi->get_source_name()},
             {"ndi_groups", groups},
             {"ndi_connections", app_->ndi_connection_count()},
             {"running", !app_->is_shutting_down()},
+            {"tally", {
+                {"on_program", tally.on_program},
+                {"on_preview", tally.on_preview}
+            }},
+            {"stats", {
+                {"frames_sent", stats.frames_sent},
+                {"frames_dropped", stats.frames_dropped},
+                {"drop_rate", stats.drop_rate},
+                {"uptime_seconds", stats.uptime_seconds},
+                {"bandwidth_mbps", stats.bandwidth_bytes_per_sec / 1000000.0}
+            }},
             {"color", {
                 {"colorspace", ndi->color_space_name()},
                 {"gamma", ndi->gamma_mode_name()},
@@ -232,6 +250,78 @@ void HttpServer::setup_routes() {
         };
         
         res.set_content(status.dump(2), "application/json");
+    });
+    
+    // GET /metrics - Prometheus-compatible metrics endpoint
+    server_->Get("/metrics", [this, add_cors](const httplib::Request&, httplib::Response& res) {
+        add_cors(res);
+        
+        auto* ndi = app_->ndi_sender();
+        auto tally = ndi->get_tally(0);
+        auto stats = app_->get_frame_stats();
+        
+        std::string ndi_name = app_->config().ndi_name;
+        
+        // Format: metric_name{labels} value
+        std::ostringstream metrics;
+        
+        metrics << "# HELP html2ndi_info NDI stream information\n";
+        metrics << "# TYPE html2ndi_info gauge\n";
+        metrics << "html2ndi_info{ndi_name=\"" << ndi_name << "\",url=\"" << app_->current_url() << "\"} 1\n\n";
+        
+        metrics << "# HELP html2ndi_running Whether the stream is running\n";
+        metrics << "# TYPE html2ndi_running gauge\n";
+        metrics << "html2ndi_running{ndi_name=\"" << ndi_name << "\"} " << (app_->is_shutting_down() ? 0 : 1) << "\n\n";
+        
+        metrics << "# HELP html2ndi_ndi_connections Number of NDI receivers connected\n";
+        metrics << "# TYPE html2ndi_ndi_connections gauge\n";
+        metrics << "html2ndi_ndi_connections{ndi_name=\"" << ndi_name << "\"} " << app_->ndi_connection_count() << "\n\n";
+        
+        metrics << "# HELP html2ndi_tally_program Whether stream is on program output\n";
+        metrics << "# TYPE html2ndi_tally_program gauge\n";
+        metrics << "html2ndi_tally_program{ndi_name=\"" << ndi_name << "\"} " << (tally.on_program ? 1 : 0) << "\n\n";
+        
+        metrics << "# HELP html2ndi_tally_preview Whether stream is on preview output\n";
+        metrics << "# TYPE html2ndi_tally_preview gauge\n";
+        metrics << "html2ndi_tally_preview{ndi_name=\"" << ndi_name << "\"} " << (tally.on_preview ? 1 : 0) << "\n\n";
+        
+        metrics << "# HELP html2ndi_fps_target Target frames per second\n";
+        metrics << "# TYPE html2ndi_fps_target gauge\n";
+        metrics << "html2ndi_fps_target{ndi_name=\"" << ndi_name << "\"} " << app_->config().fps << "\n\n";
+        
+        metrics << "# HELP html2ndi_fps_actual Actual frames per second\n";
+        metrics << "# TYPE html2ndi_fps_actual gauge\n";
+        metrics << "html2ndi_fps_actual{ndi_name=\"" << ndi_name << "\"} " << app_->current_fps() << "\n\n";
+        
+        metrics << "# HELP html2ndi_resolution_width Video width in pixels\n";
+        metrics << "# TYPE html2ndi_resolution_width gauge\n";
+        metrics << "html2ndi_resolution_width{ndi_name=\"" << ndi_name << "\"} " << app_->config().width << "\n\n";
+        
+        metrics << "# HELP html2ndi_resolution_height Video height in pixels\n";
+        metrics << "# TYPE html2ndi_resolution_height gauge\n";
+        metrics << "html2ndi_resolution_height{ndi_name=\"" << ndi_name << "\"} " << app_->config().height << "\n\n";
+        
+        metrics << "# HELP html2ndi_frames_sent_total Total frames sent\n";
+        metrics << "# TYPE html2ndi_frames_sent_total counter\n";
+        metrics << "html2ndi_frames_sent_total{ndi_name=\"" << ndi_name << "\"} " << stats.frames_sent << "\n\n";
+        
+        metrics << "# HELP html2ndi_frames_dropped_total Total frames dropped\n";
+        metrics << "# TYPE html2ndi_frames_dropped_total counter\n";
+        metrics << "html2ndi_frames_dropped_total{ndi_name=\"" << ndi_name << "\"} " << stats.frames_dropped << "\n\n";
+        
+        metrics << "# HELP html2ndi_drop_rate Frame drop rate (0-1)\n";
+        metrics << "# TYPE html2ndi_drop_rate gauge\n";
+        metrics << "html2ndi_drop_rate{ndi_name=\"" << ndi_name << "\"} " << stats.drop_rate << "\n\n";
+        
+        metrics << "# HELP html2ndi_uptime_seconds Stream uptime in seconds\n";
+        metrics << "# TYPE html2ndi_uptime_seconds counter\n";
+        metrics << "html2ndi_uptime_seconds{ndi_name=\"" << ndi_name << "\"} " << stats.uptime_seconds << "\n\n";
+        
+        metrics << "# HELP html2ndi_bandwidth_bytes_per_second Estimated bandwidth in bytes/sec\n";
+        metrics << "# TYPE html2ndi_bandwidth_bytes_per_second gauge\n";
+        metrics << "html2ndi_bandwidth_bytes_per_second{ndi_name=\"" << ndi_name << "\"} " << stats.bandwidth_bytes_per_sec << "\n";
+        
+        res.set_content(metrics.str(), "text/plain; version=0.0.4; charset=utf-8");
     });
     
     // POST /seturl - Set URL to load

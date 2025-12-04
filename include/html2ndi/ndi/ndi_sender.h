@@ -101,6 +101,26 @@ public:
     int get_connection_count(uint32_t timeout_ms = 0) const;
     
     /**
+     * Tally state structure.
+     */
+    struct TallyState {
+        bool on_program{false};  // Source is on air/program output
+        bool on_preview{false};  // Source is on preview output
+    };
+    
+    /**
+     * Get the current tally state.
+     * @param timeout_ms Timeout in milliseconds (0 for immediate)
+     * @return Tally state
+     */
+    TallyState get_tally(uint32_t timeout_ms = 0) const;
+    
+    /**
+     * Get the full NDI source name (includes machine name).
+     */
+    std::string get_source_name() const;
+    
+    /**
      * Check if NDI is initialized.
      */
     bool is_initialized() const { return initialized_; }

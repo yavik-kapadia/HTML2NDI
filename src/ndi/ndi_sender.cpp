@@ -141,6 +141,35 @@ int NdiSender::get_connection_count(uint32_t timeout_ms) const {
     return NDIlib_send_get_no_connections(sender_, timeout_ms);
 }
 
+NdiSender::TallyState NdiSender::get_tally(uint32_t timeout_ms) const {
+    TallyState state;
+    
+    if (!initialized_ || !sender_) {
+        return state;
+    }
+    
+    NDIlib_tally_t ndi_tally;
+    if (NDIlib_send_get_tally(sender_, &ndi_tally, timeout_ms)) {
+        state.on_program = ndi_tally.on_program;
+        state.on_preview = ndi_tally.on_preview;
+    }
+    
+    return state;
+}
+
+std::string NdiSender::get_source_name() const {
+    if (!initialized_ || !sender_) {
+        return name_;
+    }
+    
+    const NDIlib_source_t* source = NDIlib_send_get_source_name(sender_);
+    if (source && source->p_ndi_name) {
+        return source->p_ndi_name;
+    }
+    
+    return name_;
+}
+
 void NdiSender::update_metadata() {
     std::ostringstream oss;
     oss << "<ndi_color_info>"

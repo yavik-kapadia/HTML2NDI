@@ -74,6 +74,21 @@ public:
     uint64_t frames_dropped() const { return frames_dropped_; }
     
     /**
+     * Get uptime in seconds.
+     */
+    double uptime_seconds() const;
+    
+    /**
+     * Get drop rate (0.0 to 1.0).
+     */
+    double drop_rate() const;
+    
+    /**
+     * Get estimated bandwidth in bytes per second.
+     */
+    uint64_t bandwidth_bytes_per_sec() const;
+    
+    /**
      * Get a copy of the current frame for thumbnail/preview.
      * @param out_data Output buffer (will be resized)
      * @param out_width Output width
@@ -112,6 +127,11 @@ private:
     // Statistics
     std::atomic<uint64_t> frames_sent_{0};
     std::atomic<uint64_t> frames_dropped_{0};
+    std::chrono::steady_clock::time_point start_time_;
+    
+    // Current frame info for bandwidth calculation
+    std::atomic<int> current_width_{0};
+    std::atomic<int> current_height_{0};
     
     // FPS measurement
     std::chrono::steady_clock::time_point fps_start_;

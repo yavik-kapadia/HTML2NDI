@@ -31,8 +31,11 @@ void FramePump::start() {
     LOG_DEBUG("Starting frame pump at %d fps", target_fps_.load());
     
     running_ = true;
-    fps_start_ = std::chrono::steady_clock::now();
+    start_time_ = std::chrono::steady_clock::now();
+    fps_start_ = start_time_;
     fps_frame_count_ = 0;
+    frames_sent_ = 0;
+    frames_dropped_ = 0;
     
     thread_ = std::thread(&FramePump::pump_thread, this);
 }
@@ -59,6 +62,10 @@ void FramePump::submit_frame(const void* data, int width, int height) {
     if (!running_) {
         return;
     }
+    
+    // Track current dimensions for bandwidth calculation
+    current_width_ = width;
+    current_height_ = height;
     
     // Get write buffer
     int write_idx = write_buffer_.load();
@@ -192,6 +199,34 @@ bool FramePump::get_current_frame(std::vector<uint8_t>& out_data, int& out_width
     out_width = buffer.width;
     out_height = buffer.height;
     return true;
+}
+
+double FramePump::uptime_seconds() const {
+    if (!running_) {
+        return 0.0;
+    }
+    auto now = std::chrono::steady_clock::now();
+    auto elapsed = std::chrono::duration<double>(now - start_time_);
+    return elapsed.count();
+}
+
+double FramePump::drop_rate() const {
+    uint64_t sent = frames_sent_.load();
+    uint64_t dropped = frames_dropped_.load();
+    uint64_t total = sent + dropped;
+    if (total == 0) {
+        return 0.0;
+    }
+    return static_cast<double>(dropped) / static_cast<double>(total);
+}
+
+uint64_t FramePump::bandwidth_bytes_per_sec() const {
+    int width = current_width_.load();
+    int height = current_height_.load();
+    int fps = target_fps_.load();
+    
+    // BGRA = 4 bytes per pixel
+    return static_cast<uint64_t>(width) * height * 4 * fps;
 }
 
 } // namespace html2ndi

@@ -225,5 +225,19 @@ bool Application::get_thumbnail(std::vector<uint8_t>& out_jpeg, int width, int q
     }
 }
 
+Application::FrameStats Application::get_frame_stats() const {
+    FrameStats stats;
+    
+    if (frame_pump_) {
+        stats.frames_sent = frame_pump_->frames_sent();
+        stats.frames_dropped = frame_pump_->frames_dropped();
+        stats.drop_rate = frame_pump_->drop_rate();
+        stats.uptime_seconds = frame_pump_->uptime_seconds();
+        stats.bandwidth_bytes_per_sec = frame_pump_->bandwidth_bytes_per_sec();
+    }
+    
+    return stats;
+}
+
 } // namespace html2ndi
 

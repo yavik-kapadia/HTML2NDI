@@ -41,6 +41,15 @@ class StreamInstance: ObservableObject, Identifiable {
     @Published var crashCount: Int = 0
     @Published var isHealthy: Bool = true
     
+    // Extended stats
+    @Published var onProgram: Bool = false
+    @Published var onPreview: Bool = false
+    @Published var framesSent: UInt64 = 0
+    @Published var framesDropped: UInt64 = 0
+    @Published var dropRate: Double = 0
+    @Published var uptimeSeconds: Double = 0
+    @Published var bandwidthMbps: Double = 0
+    
     var process: Process?
     var httpPort: Int = 0
     private var statusTimer: Timer?
@@ -256,6 +265,21 @@ class StreamInstance: ObservableObject, Identifiable {
                 self?.status = status
                 self?.actualFps = status.actual_fps
                 self?.connections = status.ndi_connections
+                
+                // Update tally state
+                if let tally = status.tally {
+                    self?.onProgram = tally.on_program
+                    self?.onPreview = tally.on_preview
+                }
+                
+                // Update frame statistics
+                if let stats = status.stats {
+                    self?.framesSent = stats.frames_sent
+                    self?.framesDropped = stats.frames_dropped
+                    self?.dropRate = stats.drop_rate
+                    self?.uptimeSeconds = stats.uptime_seconds
+                    self?.bandwidthMbps = stats.bandwidth_mbps
+                }
             }
         }.resume()
     }
@@ -301,12 +325,27 @@ struct StreamStatus: Codable {
     let ndi_connections: Int
     let running: Bool
     let color: ColorStatus?
+    let tally: TallyStatus?
+    let stats: FrameStats?
 }
 
 struct ColorStatus: Codable {
     let colorspace: String
     let gamma: String
     let range: String
+}
+
+struct TallyStatus: Codable {
+    let on_program: Bool
+    let on_preview: Bool
+}
+
+struct FrameStats: Codable {
+    let frames_sent: UInt64
+    let frames_dropped: UInt64
+    let drop_rate: Double
+    let uptime_seconds: Double
+    let bandwidth_mbps: Double
 }
 
 class StreamManager: ObservableObject {

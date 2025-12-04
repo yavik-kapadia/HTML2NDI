@@ -99,6 +99,22 @@ public:
      * @return true if thumbnail was generated
      */
     bool get_thumbnail(std::vector<uint8_t>& out_jpeg, int width = 320, int quality = 75);
+    
+    /**
+     * Frame statistics structure.
+     */
+    struct FrameStats {
+        uint64_t frames_sent{0};
+        uint64_t frames_dropped{0};
+        double drop_rate{0.0};
+        double uptime_seconds{0.0};
+        uint64_t bandwidth_bytes_per_sec{0};
+    };
+    
+    /**
+     * Get frame statistics.
+     */
+    FrameStats get_frame_stats() const;
 
 private:
     Config config_;
