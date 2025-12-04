@@ -13,11 +13,13 @@ struct StreamConfig: Codable, Identifiable {
     var httpPort: Int
     var autoStart: Bool
     
-    init(name: String = "New Stream", url: String = "about:blank", ndiName: String = "HTML2NDI") {
+    init(name: String? = nil, url: String = "about:blank", ndiName: String? = nil) {
         self.id = UUID()
-        self.name = name
+        // Generate unique name if not provided
+        let shortId = String(self.id.uuidString.prefix(8))
+        self.name = (name?.isEmpty ?? true) ? "Stream-\(shortId)" : name!
         self.url = url
-        self.ndiName = ndiName
+        self.ndiName = (ndiName?.isEmpty ?? true) ? "NDI-\(shortId)" : ndiName!
         self.width = 1920
         self.height = 1080
         self.fps = 60

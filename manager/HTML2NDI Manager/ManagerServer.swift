@@ -178,21 +178,42 @@ class ManagerServer {
             return "{\"error\": \"Invalid JSON\"}"
         }
         
-        var config = StreamConfig()
-        config.name = json["name"] as? String ?? "New Stream"
-        config.url = json["url"] as? String ?? "about:blank"
-        config.ndiName = json["ndiName"] as? String ?? "HTML2NDI"
+        var config = StreamConfig(
+            name: json["name"] as? String,
+            url: json["url"] as? String ?? "about:blank",
+            ndiName: json["ndiName"] as? String
+        )
         config.width = json["width"] as? Int ?? 1920
         config.height = json["height"] as? Int ?? 1080
         config.fps = json["fps"] as? Int ?? 60
         config.colorPreset = json["colorPreset"] as? String ?? "rec709"
         config.autoStart = json["autoStart"] as? Bool ?? false
         
+        // Ensure NDI name is unique
+        config.ndiName = makeUniqueNdiName(config.ndiName)
+        
         DispatchQueue.main.async {
             StreamManager.shared.addStream(config)
         }
         
-        return "{\"success\": true, \"id\": \"\(config.id.uuidString)\"}"
+        return "{\"success\": true, \"id\": \"\(config.id.uuidString)\", \"ndiName\": \"\(config.ndiName)\"}"
+    }
+    
+    private func makeUniqueNdiName(_ baseName: String) -> String {
+        let existingNames = Set(StreamManager.shared.streams.map { $0.config.ndiName })
+        
+        if !existingNames.contains(baseName) {
+            return baseName
+        }
+        
+        // Append number to make unique
+        var counter = 2
+        var newName = "\(baseName) \(counter)"
+        while existingNames.contains(newName) {
+            counter += 1
+            newName = "\(baseName) \(counter)"
+        }
+        return newName
     }
     
     private func deleteStream(_ id: String) -> String {
@@ -242,13 +263,26 @@ class ManagerServer {
             return "{\"error\": \"Stream not found or invalid JSON\"}"
         }
         
+        // Check for NDI name uniqueness (excluding current stream)
+        if let newNdiName = json["ndiName"] as? String {
+            let otherNames = StreamManager.shared.streams
+                .filter { $0.id != uuid }
+                .map { $0.config.ndiName }
+            
+            if otherNames.contains(newNdiName) {
+                return "{\"error\": \"NDI name '\(newNdiName)' is already in use by another stream\"}"
+            }
+        }
+        
         DispatchQueue.main.async {
-            if let name = json["name"] as? String { stream.config.name = name }
+            if let name = json["name"] as? String, !name.isEmpty { stream.config.name = name }
             if let url = json["url"] as? String { 
                 stream.config.url = url
                 if stream.isRunning { stream.setURL(url) }
             }
-            if let ndiName = json["ndiName"] as? String { stream.config.ndiName = ndiName }
+            if let ndiName = json["ndiName"] as? String, !ndiName.isEmpty { 
+                stream.config.ndiName = ndiName 
+            }
             if let width = json["width"] as? Int { stream.config.width = width }
             if let height = json["height"] as? Int { stream.config.height = height }
             if let fps = json["fps"] as? Int { stream.config.fps = fps }
@@ -451,8 +485,9 @@ class ManagerServer {
             async function stopAll() { await fetch('/api/stop-all',{method:'POST'}); toast('All streams stopped'); load(); }
             
             async function updateUrl(id,url) {
-                await fetch('/api/streams/'+id,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({url})});
-                toast('URL updated');
+                const res = await fetch('/api/streams/'+id,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({url})});
+                const result = await res.json();
+                toast(result.success ? 'URL updated' : (result.error || 'Failed'));
             }
             
             function openControl(port) { if(port>0) window.open('http://localhost:'+port,'_blank'); else toast('Stream not running'); }
@@ -462,18 +497,27 @@ class ManagerServer {
             
             async function addStream() {
                 const data = {
-                    name: document.getElementById('newName').value || 'New Stream',
+                    name: document.getElementById('newName').value,
                     url: document.getElementById('newUrl').value || 'about:blank',
-                    ndiName: document.getElementById('newNdi').value || 'HTML2NDI',
+                    ndiName: document.getElementById('newNdi').value,
                     width: parseInt(document.getElementById('newW').value) || 1920,
                     height: parseInt(document.getElementById('newH').value) || 1080,
                     fps: parseInt(document.getElementById('newFps').value) || 60,
                     colorPreset: document.getElementById('newColor').value,
                     autoStart: document.getElementById('newAuto').checked
                 };
-                await fetch('/api/streams',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
+                const res = await fetch('/api/streams',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
+                const result = await res.json();
                 hideAddModal();
-                toast('Stream added');
+                if(result.success) {
+                    toast('Stream added: ' + (result.ndiName || 'OK'));
+                    // Clear form
+                    document.getElementById('newName').value = '';
+                    document.getElementById('newUrl').value = '';
+                    document.getElementById('newNdi').value = '';
+                } else {
+                    toast(result.error || 'Failed to add stream', 'error');
+                }
                 load();
             }
             
