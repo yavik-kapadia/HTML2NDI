@@ -86,10 +86,10 @@ set(UTILS_SOURCES
 )
 
 # =============================================================================
-# Main Executable
+# Main Executable (macOS .app bundle)
 # =============================================================================
 
-add_executable(html2ndi
+add_executable(html2ndi MACOSX_BUNDLE
     ${APP_SOURCES}
     ${CEF_SOURCES}
     ${NDI_SOURCES}
@@ -120,9 +120,15 @@ target_link_libraries(html2ndi PRIVATE
     "-framework Security"
 )
 
-# RPATH settings for finding dylibs at runtime
+# Bundle properties
 set_target_properties(html2ndi PROPERTIES
-    INSTALL_RPATH "@executable_path;@executable_path/../Frameworks"
+    MACOSX_BUNDLE TRUE
+    MACOSX_BUNDLE_INFO_PLIST "${CMAKE_SOURCE_DIR}/resources/Info.plist"
+    MACOSX_BUNDLE_BUNDLE_NAME "HTML2NDI"
+    MACOSX_BUNDLE_BUNDLE_VERSION "1.0.0"
+    MACOSX_BUNDLE_SHORT_VERSION_STRING "1.0"
+    MACOSX_BUNDLE_GUI_IDENTIFIER "com.html2ndi.app"
+    INSTALL_RPATH "@executable_path/../Frameworks"
     BUILD_WITH_INSTALL_RPATH TRUE
     MACOSX_RPATH TRUE
 )
@@ -154,7 +160,12 @@ set_target_properties(html2ndi_helper PROPERTIES
 # Installation
 # =============================================================================
 
-install(TARGETS html2ndi html2ndi_helper
+install(TARGETS html2ndi
+    BUNDLE DESTINATION .
+    RUNTIME DESTINATION bin
+)
+
+install(TARGETS html2ndi_helper
     RUNTIME DESTINATION bin
 )
 
@@ -168,46 +179,48 @@ install(FILES ${NDI_LIBRARY}
 )
 
 # =============================================================================
-# Post-build: Copy CEF resources
+# Post-build: Setup .app bundle structure
 # =============================================================================
 
+# Get bundle paths
+set(BUNDLE_PATH "$<TARGET_BUNDLE_DIR:html2ndi>")
+set(BUNDLE_CONTENTS "${BUNDLE_PATH}/Contents")
+set(BUNDLE_MACOS "${BUNDLE_CONTENTS}/MacOS")
+set(BUNDLE_FRAMEWORKS "${BUNDLE_CONTENTS}/Frameworks")
+set(BUNDLE_RESOURCES "${BUNDLE_CONTENTS}/Resources")
+
+# Copy CEF Framework to bundle
 add_custom_command(TARGET html2ndi POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${BUNDLE_FRAMEWORKS}"
     COMMAND ${CMAKE_COMMAND} -E copy_directory
-        ${CEF_RESOURCES_DIR}
-        $<TARGET_FILE_DIR:html2ndi>/Resources
-    COMMENT "Copying CEF resources..."
+        "${CEF_FRAMEWORK_DIR}"
+        "${BUNDLE_FRAMEWORKS}/Chromium Embedded Framework.framework"
+    COMMENT "Copying CEF framework to bundle..."
 )
 
+# Copy CEF Resources to bundle
 add_custom_command(TARGET html2ndi POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${BUNDLE_RESOURCES}"
     COMMAND ${CMAKE_COMMAND} -E copy_directory
-        ${CEF_FRAMEWORK_DIR}
-        $<TARGET_FILE_DIR:html2ndi>/../Frameworks/Chromium\ Embedded\ Framework.framework
-    COMMENT "Copying CEF framework..."
+        "${CEF_RESOURCES_DIR}"
+        "${BUNDLE_RESOURCES}"
+    COMMENT "Copying CEF resources to bundle..."
 )
 
-# Copy NDI library
+# Copy NDI library to Frameworks
 add_custom_command(TARGET html2ndi POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy
-        ${NDI_LIBRARY}
-        $<TARGET_FILE_DIR:html2ndi>/
-    COMMENT "Copying NDI library..."
+        "${NDI_LIBRARY}"
+        "${BUNDLE_FRAMEWORKS}/libndi.dylib"
+    COMMENT "Copying NDI library to bundle..."
 )
 
-# Copy CEF resource files to bin directory (for command-line app structure)
+# Copy helper to MacOS directory
 add_custom_command(TARGET html2ndi POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy
-        ${CEF_RESOURCES_DIR}/icudtl.dat
-        $<TARGET_FILE_DIR:html2ndi>/
-    COMMAND ${CMAKE_COMMAND} -E copy
-        ${CEF_RESOURCES_DIR}/resources.pak
-        $<TARGET_FILE_DIR:html2ndi>/
-    COMMAND ${CMAKE_COMMAND} -E copy
-        ${CEF_RESOURCES_DIR}/chrome_100_percent.pak
-        $<TARGET_FILE_DIR:html2ndi>/
-    COMMAND ${CMAKE_COMMAND} -E copy
-        ${CEF_RESOURCES_DIR}/chrome_200_percent.pak
-        $<TARGET_FILE_DIR:html2ndi>/
-    COMMENT "Copying CEF resource files to bin..."
+        "$<TARGET_FILE:html2ndi_helper>"
+        "${BUNDLE_MACOS}/html2ndi_helper"
+    COMMENT "Copying helper to bundle..."
 )
 
 # =============================================================================

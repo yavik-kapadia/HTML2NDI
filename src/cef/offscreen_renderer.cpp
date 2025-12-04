@@ -28,7 +28,7 @@ OffscreenRenderer::~OffscreenRenderer() {
 bool OffscreenRenderer::initialize() {
     LOG_DEBUG("Initializing CEF...");
     
-    // Get executable path for subprocess helper
+    // Get executable path
     char path[PATH_MAX];
     uint32_t size = sizeof(path);
     if (_NSGetExecutablePath(path, &size) != 0) {
@@ -37,7 +37,11 @@ bool OffscreenRenderer::initialize() {
     }
     
     std::filesystem::path exe_path(path);
-    std::filesystem::path exe_dir = exe_path.parent_path();
+    std::filesystem::path exe_dir = exe_path.parent_path(); // Contents/MacOS
+    std::filesystem::path contents_dir = exe_dir.parent_path(); // Contents
+    std::filesystem::path bundle_dir = contents_dir.parent_path(); // HTML2NDI.app
+    
+    // Helper is in the same directory as main executable (Contents/MacOS)
     std::filesystem::path helper_path = exe_dir / "html2ndi_helper";
     
     // CEF settings
@@ -48,15 +52,18 @@ bool OffscreenRenderer::initialize() {
     settings.remote_debugging_port = 0; // Disable remote debugging
     settings.log_severity = static_cast<cef_log_severity_t>(config_.cef_log_severity);
     
-    // Set paths - CEF needs these to be in specific locations for command-line apps
-    // Framework should be in ../Frameworks/
-    // Resources (icudtl.dat, pak files) should be in same directory as executable
-    CefString(&settings.framework_dir_path).FromString((exe_dir / ".." / "Frameworks").string());
-    CefString(&settings.resources_dir_path).FromString(exe_dir.string());
-    CefString(&settings.locales_dir_path).FromString((exe_dir / "Resources").string());
+    // Set bundle paths
+    // Framework: Contents/Frameworks/
+    // Resources: Contents/Resources/
+    // Main bundle: HTML2NDI.app
+    CefString(&settings.framework_dir_path).FromString((contents_dir / "Frameworks").string());
+    CefString(&settings.resources_dir_path).FromString((contents_dir / "Resources").string());
+    CefString(&settings.locales_dir_path).FromString((contents_dir / "Resources").string());
+    CefString(&settings.main_bundle_path).FromString(bundle_dir.string());
     
-    LOG_DEBUG("CEF executable: %s", exe_path.string().c_str());
-    LOG_DEBUG("CEF resources: %s", exe_dir.string().c_str());
+    LOG_DEBUG("Bundle path: %s", bundle_dir.string().c_str());
+    LOG_DEBUG("Framework path: %s", (contents_dir / "Frameworks").string().c_str());
+    LOG_DEBUG("Resources path: %s", (contents_dir / "Resources").string().c_str());
     
     // Set subprocess path
     CefString(&settings.browser_subprocess_path).FromString(helper_path.string());
