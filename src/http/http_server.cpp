@@ -291,6 +291,33 @@ void HttpServer::setup_routes() {
         }).detach();
     });
     
+    // GET /thumbnail - Get a JPEG thumbnail of the current frame
+    server_->Get("/thumbnail", [this, add_cors](const httplib::Request& req, httplib::Response& res) {
+        add_cors(res);
+        
+        // Parse optional width and quality parameters
+        int width = 320;
+        int quality = 75;
+        
+        if (req.has_param("width")) {
+            width = std::stoi(req.get_param_value("width"));
+            width = std::max(64, std::min(1920, width)); // Clamp to reasonable range
+        }
+        if (req.has_param("quality")) {
+            quality = std::stoi(req.get_param_value("quality"));
+            quality = std::max(10, std::min(100, quality));
+        }
+        
+        std::vector<uint8_t> jpeg_data;
+        if (app_->get_thumbnail(jpeg_data, width, quality)) {
+            res.set_content(reinterpret_cast<const char*>(jpeg_data.data()), 
+                           jpeg_data.size(), "image/jpeg");
+        } else {
+            res.status = 503;
+            res.set_content(R"({"error": "No frame available"})", "application/json");
+        }
+    });
+    
     // GET /color - Get current color settings
     server_->Get("/color", [this, add_cors](const httplib::Request&, httplib::Response& res) {
         add_cors(res);

@@ -83,6 +83,7 @@ set(HTTP_SOURCES
 set(UTILS_SOURCES
     src/utils/logger.cpp
     src/utils/signal_handler.cpp
+    src/utils/image_encode.cpp
 )
 
 # Helper sources

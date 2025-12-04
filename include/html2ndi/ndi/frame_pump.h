@@ -72,6 +72,15 @@ public:
      * Get the number of frames dropped.
      */
     uint64_t frames_dropped() const { return frames_dropped_; }
+    
+    /**
+     * Get a copy of the current frame for thumbnail/preview.
+     * @param out_data Output buffer (will be resized)
+     * @param out_width Output width
+     * @param out_height Output height
+     * @return true if a frame was available
+     */
+    bool get_current_frame(std::vector<uint8_t>& out_data, int& out_width, int& out_height) const;
 
 private:
     void pump_thread();

@@ -462,6 +462,13 @@ class ManagerServer {
                             <div class="status"><div class="dot ${s.isRunning?'on':'off'}"></div><span class="ndi-name">${s.ndiName}</span></div>
                             <span style="color:var(--dim);font-size:.85rem">${s.width}x${s.height} @ ${s.fps}fps</span>
                         </div>
+                        ${s.isRunning && s.httpPort > 0 ? `
+                        <div style="margin-bottom:1rem;border-radius:8px;overflow:hidden;background:var(--input)">
+                            <img src="http://localhost:${s.httpPort}/thumbnail?width=400&t=${Date.now()}" 
+                                 style="width:100%;height:auto;display:block" 
+                                 onerror="this.style.display='none'" 
+                                 alt="Preview">
+                        </div>` : ''}
                         <div class="stats">
                             <div class="stat"><div class="stat-l">Status</div><div class="stat-v" style="color:${s.isRunning?'var(--ok)':'var(--dim)'}">${s.isRunning?'Running':'Stopped'}</div></div>
                             <div class="stat"><div class="stat-l">FPS</div><div class="stat-v">${s.actualFps?.toFixed(1)||'-'}</div></div>

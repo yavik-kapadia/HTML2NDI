@@ -2,7 +2,9 @@
 
 #include "html2ndi/config.h"
 #include <atomic>
+#include <cstdint>
 #include <memory>
+#include <vector>
 
 namespace html2ndi {
 
@@ -87,6 +89,15 @@ public:
      * Get NDI sender for configuration.
      */
     NdiSender* ndi_sender() { return ndi_sender_.get(); }
+    
+    /**
+     * Get a JPEG thumbnail of the current frame.
+     * @param out_jpeg Output JPEG data
+     * @param width Target width (0 for original)
+     * @param quality JPEG quality (1-100)
+     * @return true if thumbnail was generated
+     */
+    bool get_thumbnail(std::vector<uint8_t>& out_jpeg, int width = 320, int quality = 75);
 
 private:
     Config config_;

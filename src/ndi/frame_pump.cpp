@@ -177,5 +177,22 @@ void FramePump::update_fps_counter() {
     }
 }
 
+bool FramePump::get_current_frame(std::vector<uint8_t>& out_data, int& out_width, int& out_height) const {
+    // Get the most recently written buffer
+    int read_idx = read_buffer_.load();
+    const FrameBuffer& buffer = buffers_[read_idx];
+    
+    std::lock_guard<std::mutex> lock(const_cast<std::mutex&>(buffer_mutex_));
+    
+    if (buffer.data.empty() || buffer.width == 0 || buffer.height == 0) {
+        return false;
+    }
+    
+    out_data = buffer.data;
+    out_width = buffer.width;
+    out_height = buffer.height;
+    return true;
+}
+
 } // namespace html2ndi
 

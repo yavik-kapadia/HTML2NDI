@@ -9,6 +9,7 @@
 #include "html2ndi/ndi/frame_pump.h"
 #include "html2ndi/http/http_server.h"
 #include "html2ndi/utils/logger.h"
+#include "html2ndi/utils/image_encode.h"
 
 #include <chrono>
 #include <thread>
@@ -176,6 +177,27 @@ int Application::ndi_connection_count() const {
 
 float Application::current_fps() const {
     return actual_fps_;
+}
+
+bool Application::get_thumbnail(std::vector<uint8_t>& out_jpeg, int width, int quality) {
+    if (!frame_pump_) {
+        return false;
+    }
+    
+    std::vector<uint8_t> frame_data;
+    int frame_width, frame_height;
+    
+    if (!frame_pump_->get_current_frame(frame_data, frame_width, frame_height)) {
+        return false;
+    }
+    
+    if (width > 0 && width < frame_width) {
+        return encode_jpeg_scaled(frame_data.data(), frame_width, frame_height, 
+                                  width, quality, out_jpeg);
+    } else {
+        return encode_jpeg(frame_data.data(), frame_width, frame_height, 
+                          quality, out_jpeg);
+    }
 }
 
 } // namespace html2ndi
