@@ -1,0 +1,71 @@
+name: Build
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  CEF_VERSION: "120.1.10+g3ce3184+chromium-120.0.6099.129"
+
+jobs:
+  build:
+    runs-on: macos-14
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Install dependencies
+      run: |
+        brew install cmake ninja
+        
+    - name: Cache CEF
+      uses: actions/cache@v4
+      with:
+        path: build/cef
+        key: cef-${{ env.CEF_VERSION }}-macosarm64
+        
+    - name: Download CEF
+      run: |
+        mkdir -p build/cef
+        cd build/cef
+        
+        CEF_DIST="cef_binary_${CEF_VERSION}_macosarm64"
+        if [ ! -d "$CEF_DIST" ]; then
+          echo "Downloading CEF..."
+          curl -L "https://cef-builds.spotifycdn.com/${CEF_DIST}.tar.bz2" -o cef.tar.bz2
+          tar -xjf cef.tar.bz2
+          rm cef.tar.bz2
+        fi
+        
+    - name: Check for NDI SDK
+      run: |
+        # NDI SDK must be provided via secrets or manual setup
+        # This is a placeholder - in practice you'd:
+        # 1. Download from a private URL stored in secrets
+        # 2. Or have it bundled in the repo (if license permits)
+        # 3. Or skip NDI linking for CI builds
+        
+        if [ ! -d "/Library/NDI SDK for Apple" ]; then
+          echo "::warning::NDI SDK not found. Build may fail or have limited functionality."
+          echo "For full builds, install NDI SDK from https://ndi.video/download-ndi-sdk/"
+        fi
+        
+    - name: Build html2ndi
+      run: |
+        cd build
+        cmake .. -G Ninja -DCMAKE_BUILD_TYPE=Release
+        ninja || echo "::warning::html2ndi build failed - NDI SDK may be missing"
+        
+    - name: Build Swift Manager
+      run: |
+        cd manager
+        swift build -c release
+        
+    - name: Run tests
+      run: |
+        # Add tests here when available
+        echo "No tests configured yet"
+

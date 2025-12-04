@@ -274,6 +274,8 @@ class ManagerServer {
             }
         }
         
+        var needsRestart = false
+        
         DispatchQueue.main.async {
             if let name = json["name"] as? String, !name.isEmpty { stream.config.name = name }
             if let url = json["url"] as? String { 
@@ -281,6 +283,9 @@ class ManagerServer {
                 if stream.isRunning { stream.setURL(url) }
             }
             if let ndiName = json["ndiName"] as? String, !ndiName.isEmpty { 
+                if stream.config.ndiName != ndiName && stream.isRunning {
+                    needsRestart = true
+                }
                 stream.config.ndiName = ndiName 
             }
             if let width = json["width"] as? Int { stream.config.width = width }
@@ -295,6 +300,9 @@ class ManagerServer {
             StreamManager.shared.saveStreams()
         }
         
+        if needsRestart {
+            return "{\"success\": true, \"needsRestart\": true, \"message\": \"NDI name change requires restart\"}"
+        }
         return "{\"success\": true}"
     }
     
@@ -482,7 +490,7 @@ class ManagerServer {
                 el.innerHTML = streams.map(s => `
                     <div class="card">
                         <div class="card-h">
-                            <div class="status"><div class="dot ${s.isRunning?'on':'off'}"></div><span class="ndi-name">${s.ndiName}</span></div>
+                            <div class="status"><div class="dot ${s.isRunning?'on':'off'}"></div></div>
                             <span style="color:var(--dim);font-size:.85rem">${s.width}x${s.height} @ ${s.fps}fps</span>
                         </div>
                         ${s.isRunning && s.httpPort > 0 ? `
@@ -494,13 +502,17 @@ class ManagerServer {
                                  onload="this.style.opacity='1'"
                                  alt="Preview">
                         </div>` : ''}
+                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem;margin-bottom:1rem">
+                            <div><label style="font-size:.7rem;color:var(--dim);text-transform:uppercase">Stream Name</label><input id="name-${s.id}" data-stream-id="${s.id}" data-field="name" value="${s.name||''}" onchange="updateField('${s.id}','name',this.value)" placeholder="Stream Name" style="width:100%"></div>
+                            <div><label style="font-size:.7rem;color:var(--dim);text-transform:uppercase">NDI Source</label><input id="ndi-${s.id}" data-stream-id="${s.id}" data-field="ndiName" value="${s.ndiName}" onchange="updateField('${s.id}','ndiName',this.value)" placeholder="NDI Name" style="width:100%"></div>
+                        </div>
                         <div class="stats">
                             <div class="stat"><div class="stat-l">Status</div><div class="stat-v" style="color:${s.isRunning?'var(--ok)':'var(--dim)'}">${s.isRunning?'Running':'Stopped'}</div></div>
                             <div class="stat"><div class="stat-l">FPS</div><div class="stat-v">${s.actualFps?.toFixed(1)||'-'}</div></div>
                             <div class="stat"><div class="stat-l">Connections</div><div class="stat-v">${s.connections||0}</div></div>
                         </div>
                         <div class="url-row">
-                            <input id="url-${s.id}" data-stream-id="${s.id}" value="${s.url}" onchange="updateUrl('${s.id}',this.value)" placeholder="URL">
+                            <input id="url-${s.id}" data-stream-id="${s.id}" data-field="url" value="${s.url}" onchange="updateField('${s.id}','url',this.value)" placeholder="URL">
                             <button class="btn-s btn-sm" onclick="openControl('${s.httpPort}')">Control</button>
                         </div>
                         <div class="card-actions">
@@ -514,8 +526,9 @@ class ManagerServer {
                 `).join('');
                 
                 // Restore focus and value if user was editing
-                if (activeId) {
-                    const input = document.getElementById('url-' + activeId);
+                if (activeId && activeEl?.dataset?.field) {
+                    const field = activeEl.dataset.field;
+                    const input = document.getElementById(field + '-' + activeId);
                     if (input) {
                         input.value = activeValue;
                         input.focus();
@@ -530,10 +543,20 @@ class ManagerServer {
             async function startAll() { await fetch('/api/start-all',{method:'POST'}); toast('All streams started'); load(); }
             async function stopAll() { await fetch('/api/stop-all',{method:'POST'}); toast('All streams stopped'); load(); }
             
-            async function updateUrl(id,url) {
-                const res = await fetch('/api/streams/'+id,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({url})});
+            async function updateField(id, field, value) {
+                const body = {};
+                body[field] = value;
+                const res = await fetch('/api/streams/'+id,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
                 const result = await res.json();
-                toast(result.success ? 'URL updated' : (result.error || 'Failed'));
+                if (result.success) {
+                    toast(field === 'url' ? 'URL updated' : field === 'name' ? 'Name updated' : 'NDI name updated');
+                    if (field === 'ndiName' && result.needsRestart) {
+                        toast('Restart stream to apply NDI name change');
+                    }
+                } else {
+                    toast(result.error || 'Failed to update');
+                }
+                load();
             }
             
             function openControl(port) { if(port>0) window.open('http://localhost:'+port,'_blank'); else toast('Stream not running'); }

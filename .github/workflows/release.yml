@@ -1,0 +1,157 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version number (e.g., 1.0.0)'
+        required: true
+        default: '1.0.0'
+
+env:
+  CEF_VERSION: "120.1.10+g3ce3184+chromium-120.0.6099.129"
+
+jobs:
+  build:
+    runs-on: macos-14  # Apple Silicon runner
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set version
+      id: version
+      run: |
+        if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          echo "VERSION=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+        else
+          echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+        fi
+        
+    - name: Install dependencies
+      run: |
+        brew install cmake ninja librsvg
+        
+    - name: Setup NDI SDK
+      env:
+        NDI_SDK_URL: ${{ secrets.NDI_SDK_URL }}
+      run: |
+        # NDI SDK can be provided via:
+        # 1. Secret URL (NDI_SDK_URL) pointing to the SDK package
+        # 2. Pre-installed on a self-hosted runner
+        
+        if [ -n "$NDI_SDK_URL" ]; then
+          echo "Downloading NDI SDK from secret URL..."
+          curl -L "$NDI_SDK_URL" -o /tmp/ndi-sdk.pkg
+          sudo installer -pkg /tmp/ndi-sdk.pkg -target /
+          rm /tmp/ndi-sdk.pkg
+        elif [ -d "/Library/NDI SDK for Apple" ]; then
+          echo "NDI SDK already installed"
+        else
+          echo "::error::NDI SDK not available. Set NDI_SDK_URL secret or use self-hosted runner."
+          exit 1
+        fi
+        
+    - name: Download and extract CEF
+      run: |
+        mkdir -p build/cef
+        cd build/cef
+        
+        CEF_DIST="cef_binary_${CEF_VERSION}_macosarm64"
+        if [ ! -d "$CEF_DIST" ]; then
+          echo "Downloading CEF..."
+          curl -L "https://cef-builds.spotifycdn.com/${CEF_DIST}.tar.bz2" -o cef.tar.bz2
+          tar -xjf cef.tar.bz2
+          rm cef.tar.bz2
+        fi
+        
+    - name: Build html2ndi worker
+      run: |
+        cd build
+        cmake .. -G Ninja \
+          -DCMAKE_BUILD_TYPE=Release \
+          -DCMAKE_OSX_ARCHITECTURES=arm64
+        ninja
+        
+    - name: Build Swift Manager App
+      run: |
+        cd manager
+        swift build -c release
+        
+    - name: Package Application
+      run: |
+        VERSION="${{ steps.version.outputs.VERSION }}"
+        
+        # Create the final app bundle
+        APP_NAME="HTML2NDI Manager"
+        APP_DIR="dist/${APP_NAME}.app"
+        
+        mkdir -p dist
+        rm -rf "$APP_DIR"
+        
+        # Copy manager app structure
+        mkdir -p "$APP_DIR/Contents/MacOS"
+        mkdir -p "$APP_DIR/Contents/Resources"
+        
+        # Copy manager executable
+        cp "manager/.build/release/HTML2NDI Manager" "$APP_DIR/Contents/MacOS/"
+        
+        # Copy Info.plist and update version
+        cp "manager/HTML2NDI Manager/Info.plist" "$APP_DIR/Contents/"
+        /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" "$APP_DIR/Contents/Info.plist"
+        /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $VERSION" "$APP_DIR/Contents/Info.plist"
+        
+        # Copy icon
+        cp "manager/Resources/AppIcon.icns" "$APP_DIR/Contents/Resources/" 2>/dev/null || true
+        
+        # Copy html2ndi worker app
+        cp -R "build/bin/html2ndi.app" "$APP_DIR/Contents/Resources/"
+        
+        # Create DMG
+        DMG_NAME="HTML2NDI-Manager-${VERSION}-arm64.dmg"
+        
+        # Create a temporary directory for DMG contents
+        mkdir -p dist/dmg-contents
+        cp -R "$APP_DIR" dist/dmg-contents/
+        ln -s /Applications dist/dmg-contents/Applications
+        
+        # Create DMG
+        hdiutil create -volname "HTML2NDI Manager" \
+          -srcfolder dist/dmg-contents \
+          -ov -format UDZO \
+          "dist/$DMG_NAME"
+        
+        rm -rf dist/dmg-contents
+        
+        # Also create a ZIP
+        cd dist
+        zip -r "HTML2NDI-Manager-${VERSION}-arm64.zip" "${APP_NAME}.app"
+        cd ..
+        
+        echo "DMG_PATH=dist/$DMG_NAME" >> $GITHUB_ENV
+        echo "ZIP_PATH=dist/HTML2NDI-Manager-${VERSION}-arm64.zip" >> $GITHUB_ENV
+        
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: HTML2NDI-Manager-${{ steps.version.outputs.VERSION }}
+        path: |
+          dist/*.dmg
+          dist/*.zip
+          
+    - name: Create Release
+      if: startsWith(github.ref, 'refs/tags/')
+      uses: softprops/action-gh-release@v1
+      with:
+        files: |
+          dist/*.dmg
+          dist/*.zip
+        generate_release_notes: true
+        draft: false
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
