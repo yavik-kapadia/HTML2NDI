@@ -5,6 +5,7 @@
 #include "include/cef_life_span_handler.h"
 #include "include/cef_load_handler.h"
 #include "include/cef_display_handler.h"
+#include "include/cef_request_handler.h"
 
 #include <atomic>
 #include <functional>
@@ -31,7 +32,8 @@ class CefHandler : public CefClient,
                    public CefRenderHandler,
                    public CefLifeSpanHandler,
                    public CefLoadHandler,
-                   public CefDisplayHandler {
+                   public CefDisplayHandler,
+                   public CefRequestHandler {
 public:
     CefHandler(int width, int height, FrameCallback callback);
     ~CefHandler() override;
@@ -41,6 +43,7 @@ public:
     CefRefPtr<CefLifeSpanHandler> GetLifeSpanHandler() override { return this; }
     CefRefPtr<CefLoadHandler> GetLoadHandler() override { return this; }
     CefRefPtr<CefDisplayHandler> GetDisplayHandler() override { return this; }
+    CefRefPtr<CefRequestHandler> GetRequestHandler() override { return this; }
     
     // CefRenderHandler methods
     void GetViewRect(CefRefPtr<CefBrowser> browser, CefRect& rect) override;
@@ -91,6 +94,11 @@ public:
         const CefString& message,
         const CefString& source,
         int line) override;
+    
+    // CefRequestHandler methods
+    void OnRenderProcessTerminated(
+        CefRefPtr<CefBrowser> browser,
+        TerminationStatus status) override;
     
     // Browser control
     void SetBrowser(CefRefPtr<CefBrowser> browser);

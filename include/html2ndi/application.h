@@ -14,6 +14,7 @@ class NdiSender;
 class FramePump;
 class HttpServer;
 class Logger;
+class Watchdog;
 
 /**
  * Main application class.
@@ -107,6 +108,7 @@ private:
     std::unique_ptr<NdiSender> ndi_sender_;
     std::unique_ptr<FramePump> frame_pump_;
     std::unique_ptr<HttpServer> http_server_;
+    std::unique_ptr<Watchdog> watchdog_;
     
     // Actual measured FPS
     std::atomic<float> actual_fps_{0.0f};

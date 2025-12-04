@@ -7,6 +7,9 @@
 
 #include "include/wrapper/cef_helpers.h"
 
+#include <chrono>
+#include <thread>
+
 namespace html2ndi {
 
 CefHandler::CefHandler(int width, int height, FrameCallback callback)
@@ -187,6 +190,49 @@ bool CefHandler::OnConsoleMessage(
               line);
     
     return false; // Don't suppress
+}
+
+// =============================================================================
+// CefRequestHandler
+// =============================================================================
+
+void CefHandler::OnRenderProcessTerminated(
+    CefRefPtr<CefBrowser> browser,
+    TerminationStatus status) {
+    
+    const char* status_str = "unknown";
+    switch (status) {
+        case TS_ABNORMAL_TERMINATION:
+            status_str = "abnormal termination";
+            break;
+        case TS_PROCESS_WAS_KILLED:
+            status_str = "process killed";
+            break;
+        case TS_PROCESS_CRASHED:
+            status_str = "process crashed";
+            break;
+        case TS_PROCESS_OOM:
+            status_str = "out of memory";
+            break;
+    }
+    
+    LOG_ERROR("Render process terminated: %s", status_str);
+    
+    // Attempt recovery by reloading the page
+    // Don't reload on abnormal termination as it might cause a loop
+    if (status != TS_ABNORMAL_TERMINATION) {
+        LOG_INFO("Attempting to recover by reloading page...");
+        
+        // Small delay before reload to avoid rapid crash loops
+        std::thread([browser]() {
+            std::this_thread::sleep_for(std::chrono::milliseconds(500));
+            if (browser) {
+                browser->Reload();
+            }
+        }).detach();
+    } else {
+        LOG_ERROR("Cannot recover from render process failure, manual restart required");
+    }
 }
 
 // =============================================================================

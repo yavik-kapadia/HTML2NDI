@@ -169,8 +169,8 @@ Open dashboard: `http://localhost:8080`
 
 ### Creating a Release
 ```bash
-git tag v1.1.0
-git push origin v1.1.0
+git tag v1.2.0
+git push origin v1.2.0
 ```
 
 Produces:
@@ -189,14 +189,19 @@ Produces:
 ---
 
 ## Implemented Features (Beyond Original Spec)
-- ✅ Multi-stream management via native menu bar app
-- ✅ Web-based configuration dashboard
-- ✅ Live preview thumbnails (JPEG)
-- ✅ Configurable color space presets
-- ✅ Editable stream/NDI names
-- ✅ Auto-generated unique identifiers
-- ✅ GitHub Actions CI/CD
-- ✅ Custom app icon
+- Multi-stream management via native menu bar app
+- Web-based configuration dashboard
+- Live preview thumbnails (JPEG)
+- Configurable color space presets
+- Editable stream/NDI names
+- Auto-generated unique identifiers
+- GitHub Actions CI/CD
+- Custom app icon
+- Process auto-restart with exponential backoff
+- Health checks for stalled streams
+- CEF render process crash recovery
+- Watchdog timer for main loop hang detection
+- macOS unified logging (os_log)
 
 ## Future Enhancements
 - Audio pipeline (WebAudio → NDI audio)

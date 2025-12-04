@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.21)
-project(HTML2NDI VERSION 1.1.0 LANGUAGES CXX)
+project(HTML2NDI VERSION 1.2.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -98,6 +98,7 @@ set(UTILS_SOURCES
     src/utils/logger.cpp
     src/utils/signal_handler.cpp
     src/utils/image_encode.cpp
+    src/utils/watchdog.cpp
 )
 
 # Helper sources
@@ -170,8 +171,8 @@ set_target_properties(${MAIN_TARGET} PROPERTIES
     MACOSX_BUNDLE TRUE
     MACOSX_BUNDLE_INFO_PLIST "${CMAKE_SOURCE_DIR}/resources/Info.plist"
     MACOSX_BUNDLE_BUNDLE_NAME "HTML2NDI"
-    MACOSX_BUNDLE_BUNDLE_VERSION "1.1.0"
-    MACOSX_BUNDLE_SHORT_VERSION_STRING "1.1"
+    MACOSX_BUNDLE_BUNDLE_VERSION "1.2.0"
+    MACOSX_BUNDLE_SHORT_VERSION_STRING "1.2"
     MACOSX_BUNDLE_GUI_IDENTIFIER "com.html2ndi.app"
     INSTALL_RPATH "@executable_path/../Frameworks"
     BUILD_WITH_INSTALL_RPATH TRUE
@@ -302,12 +303,14 @@ if(BUILD_TESTS)
         tests/cpp/test_config.cpp
         tests/cpp/test_logger.cpp
         tests/cpp/test_http_api.cpp
+        tests/cpp/test_watchdog.cpp
     )
     
     # Sources that can be tested without CEF/NDI runtime
     set(TESTABLE_SOURCES
         src/app/config.cpp
         src/utils/logger.cpp
+        src/utils/watchdog.cpp
     )
     
     # Create test executable

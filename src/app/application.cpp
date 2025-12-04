@@ -10,6 +10,7 @@
 #include "html2ndi/http/http_server.h"
 #include "html2ndi/utils/logger.h"
 #include "html2ndi/utils/image_encode.h"
+#include "html2ndi/utils/watchdog.h"
 
 #include <chrono>
 #include <thread>
@@ -79,6 +80,18 @@ bool Application::initialize() {
         }
     }
     
+    // Start watchdog timer (30 second timeout for main loop hang detection)
+    watchdog_ = std::make_unique<Watchdog>(
+        std::chrono::seconds(30),
+        [this]() {
+            LOG_FATAL("Watchdog detected main loop hang - forcing shutdown");
+            // Force shutdown - will cause process to exit, triggering auto-restart
+            // if managed by the StreamManager
+            std::abort();
+        }
+    );
+    watchdog_->start();
+    
     return true;
 }
 
@@ -88,6 +101,11 @@ int Application::run() {
     // Run CEF message loop
     // This blocks until shutdown is requested
     while (!shutdown_requested_) {
+        // Signal watchdog that main loop is alive
+        if (watchdog_) {
+            watchdog_->heartbeat();
+        }
+        
         renderer_->do_message_loop_work();
         
         // Update actual FPS from frame pump
@@ -110,7 +128,14 @@ void Application::shutdown() {
     
     LOG_INFO("Shutting down application...");
     
-    // Stop HTTP server first
+    // Stop watchdog first to prevent false alarms during shutdown
+    if (watchdog_) {
+        LOG_DEBUG("Stopping watchdog");
+        watchdog_->stop();
+        watchdog_.reset();
+    }
+    
+    // Stop HTTP server
     if (http_server_) {
         LOG_DEBUG("Stopping HTTP server");
         http_server_->stop();

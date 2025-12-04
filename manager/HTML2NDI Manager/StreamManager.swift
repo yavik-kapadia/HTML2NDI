@@ -38,10 +38,23 @@ class StreamInstance: ObservableObject, Identifiable {
     @Published var status: StreamStatus?
     @Published var actualFps: Double = 0
     @Published var connections: Int = 0
+    @Published var crashCount: Int = 0
+    @Published var isHealthy: Bool = true
     
     var process: Process?
     var httpPort: Int = 0
     private var statusTimer: Timer?
+    private var healthCheckTimer: Timer?
+    private var workerPathCache: String = ""
+    
+    // Auto-restart configuration
+    private var intentionalStop: Bool = false
+    private var lastRestartTime: Date?
+    private var restartAttempts: Int = 0
+    private let maxRestartAttempts: Int = 5
+    private let baseRestartDelay: TimeInterval = 2.0
+    private var lastFpsUpdateTime: Date = Date()
+    private var stalledFrameCount: Int = 0
     
     init(config: StreamConfig) {
         self.id = config.id
@@ -50,6 +63,9 @@ class StreamInstance: ObservableObject, Identifiable {
     
     func start(workerPath: String) {
         guard !isRunning else { return }
+        
+        workerPathCache = workerPath
+        intentionalStop = false
         
         // Find available port
         httpPort = config.httpPort > 0 ? config.httpPort : findAvailablePort()
@@ -85,10 +101,9 @@ class StreamInstance: ObservableObject, Identifiable {
         process.standardOutput = pipe
         process.standardError = pipe
         
-        process.terminationHandler = { [weak self] _ in
+        process.terminationHandler = { [weak self] proc in
             DispatchQueue.main.async {
-                self?.isRunning = false
-                self?.statusTimer?.invalidate()
+                self?.handleProcessTermination(exitCode: proc.terminationStatus)
             }
         }
         
@@ -96,11 +111,14 @@ class StreamInstance: ObservableObject, Identifiable {
             try process.run()
             self.process = process
             isRunning = true
+            isHealthy = true
+            stalledFrameCount = 0
             
-            // Apply color preset
+            // Apply color preset and start monitoring
             DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in
                 self?.applyColorPreset()
                 self?.startStatusPolling()
+                self?.startHealthCheck()
             }
             
             logInfo("Started stream '\(config.name)' on port \(httpPort)")
@@ -109,12 +127,89 @@ class StreamInstance: ObservableObject, Identifiable {
         }
     }
     
+    private func handleProcessTermination(exitCode: Int32) {
+        isRunning = false
+        statusTimer?.invalidate()
+        healthCheckTimer?.invalidate()
+        
+        // Check if this was an intentional stop
+        if intentionalStop {
+            logInfo("Stream '\(config.name)' stopped intentionally")
+            restartAttempts = 0
+            return
+        }
+        
+        // Process crashed - log and attempt restart
+        crashCount += 1
+        logWarning("Stream '\(config.name)' terminated unexpectedly (exit: \(exitCode), crashes: \(crashCount))")
+        
+        // Check if we should auto-restart
+        guard config.autoStart || restartAttempts > 0 else {
+            logInfo("Auto-restart disabled for '\(config.name)'")
+            return
+        }
+        
+        // Check restart limits
+        if restartAttempts >= maxRestartAttempts {
+            logError("Stream '\(config.name)' exceeded max restart attempts (\(maxRestartAttempts))")
+            restartAttempts = 0
+            return
+        }
+        
+        // Calculate delay with exponential backoff
+        let delay = baseRestartDelay * pow(2.0, Double(restartAttempts))
+        restartAttempts += 1
+        
+        logInfo("Restarting stream '\(config.name)' in \(Int(delay))s (attempt \(restartAttempts)/\(maxRestartAttempts))")
+        
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+            guard let self = self, !self.intentionalStop, !self.isRunning else { return }
+            self.start(workerPath: self.workerPathCache)
+        }
+    }
+    
     func stop() {
         logInfo("Stopping stream '\(config.name)'")
+        intentionalStop = true
+        restartAttempts = 0
         statusTimer?.invalidate()
+        healthCheckTimer?.invalidate()
         process?.terminate()
         process = nil
         isRunning = false
+    }
+    
+    private func startHealthCheck() {
+        healthCheckTimer = Timer.scheduledTimer(withTimeInterval: 10.0, repeats: true) { [weak self] _ in
+            self?.checkHealth()
+        }
+    }
+    
+    private func checkHealth() {
+        guard isRunning else { return }
+        
+        // Check if FPS has been zero for too long (stalled stream)
+        if actualFps < 0.5 {
+            stalledFrameCount += 1
+            if stalledFrameCount >= 3 { // 30 seconds of no frames
+                isHealthy = false
+                logWarning("Stream '\(config.name)' appears stalled (FPS: \(actualFps), stalled checks: \(stalledFrameCount))")
+            }
+        } else {
+            stalledFrameCount = 0
+            isHealthy = true
+        }
+        
+        // Check if process is still responding
+        if let proc = process, !proc.isRunning {
+            logWarning("Stream '\(config.name)' process died unexpectedly")
+            handleProcessTermination(exitCode: -1)
+        }
+    }
+    
+    func resetRestartCounter() {
+        restartAttempts = 0
+        crashCount = 0
     }
     
     func applyColorPreset() {
