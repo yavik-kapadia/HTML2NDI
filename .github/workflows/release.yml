@@ -77,8 +77,14 @@ jobs:
         cd build
         cmake .. -G Ninja \
           -DCMAKE_BUILD_TYPE=Release \
-          -DCMAKE_OSX_ARCHITECTURES=arm64
+          -DCMAKE_OSX_ARCHITECTURES=arm64 \
+          -DBUILD_TESTS=ON
         ninja
+
+    - name: Run C++ tests
+      run: |
+        cd build
+        ctest --output-on-failure --timeout 60
 
     # Cache Swift build
     - name: Cache Swift packages
@@ -95,6 +101,9 @@ jobs:
       run: |
         cd manager
         swift build -c release
+        
+    # Note: Swift tests require Xcode project for menu bar apps
+    # SPM doesn't support XCTest with SwiftUI/AppKit apps properly
         
     - name: Package Application
       run: |

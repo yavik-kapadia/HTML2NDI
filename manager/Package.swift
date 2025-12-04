@@ -17,3 +17,6 @@ let package = Package(
     ]
 )
 
+// Note: Swift tests require Xcode project for menu bar apps with SwiftUI/AppKit
+// Use `xcodebuild test` instead of `swift test` for full test coverage
+

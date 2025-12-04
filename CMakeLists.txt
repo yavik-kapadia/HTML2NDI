@@ -55,6 +55,20 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(json)
 
+# Google Test for unit testing
+option(BUILD_TESTS "Build unit tests" ON)
+if(BUILD_TESTS)
+    FetchContent_Declare(
+        googletest
+        GIT_REPOSITORY https://github.com/google/googletest.git
+        GIT_TAG v1.14.0
+    )
+    # Prevent overriding parent project's compiler/linker settings on Windows
+    set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+    FetchContent_MakeAvailable(googletest)
+    enable_testing()
+endif()
+
 # =============================================================================
 # Source Files
 # =============================================================================
@@ -278,6 +292,55 @@ install(FILES ${NDI_LIBRARY}
 )
 
 # =============================================================================
+# Unit Tests
+# =============================================================================
+
+if(BUILD_TESTS)
+    # Unit test sources (tests that don't require CEF/NDI runtime)
+    set(TEST_SOURCES
+        tests/cpp/test_main.cpp
+        tests/cpp/test_config.cpp
+        tests/cpp/test_logger.cpp
+        tests/cpp/test_http_api.cpp
+    )
+    
+    # Sources that can be tested without CEF/NDI runtime
+    set(TESTABLE_SOURCES
+        src/app/config.cpp
+        src/utils/logger.cpp
+    )
+    
+    # Create test executable
+    add_executable(html2ndi_tests ${TEST_SOURCES} ${TESTABLE_SOURCES})
+    
+    target_include_directories(html2ndi_tests PRIVATE
+        ${CMAKE_SOURCE_DIR}/include
+        ${CEF_INCLUDE_DIR}
+        ${NDI_INCLUDE_DIR}
+    )
+    
+    target_link_libraries(html2ndi_tests PRIVATE
+        GTest::gtest
+        GTest::gtest_main
+        httplib::httplib
+        nlohmann_json::nlohmann_json
+        "-framework CoreFoundation"
+        "-framework Security"
+    )
+    
+    # Register tests with CTest
+    include(GoogleTest)
+    gtest_discover_tests(html2ndi_tests)
+    
+    # Add custom run_tests target (can't use "test" - reserved by CTest)
+    add_custom_target(run_tests
+        COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure
+        DEPENDS html2ndi_tests
+        COMMENT "Running unit tests..."
+    )
+endif()
+
+# =============================================================================
 # Summary
 # =============================================================================
 
@@ -288,4 +351,5 @@ message(STATUS "C++ Standard: ${CMAKE_CXX_STANDARD}")
 message(STATUS "Target architectures: ${CMAKE_OSX_ARCHITECTURES}")
 message(STATUS "CEF: ${CEF_VERSION}")
 message(STATUS "NDI: ${NDI_VERSION}")
+message(STATUS "Tests: ${BUILD_TESTS}")
 message(STATUS "")

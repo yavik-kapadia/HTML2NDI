@@ -61,8 +61,13 @@ jobs:
       run: |
         mkdir -p build
         cd build
-        cmake .. -G Ninja -DCMAKE_BUILD_TYPE=Release
+        cmake .. -G Ninja -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=ON
         ninja
+
+    - name: Run C++ tests
+      run: |
+        cd build
+        ctest --output-on-failure --timeout 60
 
     # Cache Swift packages
     - name: Cache Swift packages
@@ -80,8 +85,7 @@ jobs:
         cd manager
         swift build -c release
         
-    - name: Run tests
-      run: |
-        # Add tests here when available
-        echo "No tests configured yet"
+    # Note: Swift tests require Xcode project for menu bar apps
+    # SPM doesn't support XCTest with SwiftUI/AppKit apps properly
+    # Use xcodebuild test with an Xcode project for full Swift test coverage
 

@@ -204,3 +204,12 @@ Produces:
 - Code signing and notarization
 - App Store distribution
 - Multiple NDI output formats
+
+
+## AGENT INSTRUCTIONS
+- Always write tests.
+- All docs and md files should be stored in /docs except readme.md and AGENTS.md
+- You are an expert in C++ and Swift, take on the harder route and only choose the easiest path last.
+- Be concise with your documentation.
+- The commit should pass all tests before you merge.
+- Always run the linter before before you merge.
