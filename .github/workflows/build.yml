@@ -24,20 +24,38 @@ jobs:
     - name: Install dependencies
       run: |
         brew install cmake ninja
+
+    # Cache NDI SDK
+    - name: Cache NDI SDK
+      id: cache-ndi
+      uses: actions/cache@v4
+      with:
+        path: /Library/NDI SDK for Apple
+        key: ndi-sdk-apple-v6
         
     - name: Configure AWS credentials (OIDC)
+      if: steps.cache-ndi.outputs.cache-hit != 'true'
       uses: aws-actions/configure-aws-credentials@v4
       with:
         role-to-assume: arn:aws:iam::598063954204:role/HTML2NDI-GitHubActions
         aws-region: us-east-1
         
     - name: Setup NDI SDK
+      if: steps.cache-ndi.outputs.cache-hit != 'true'
       run: |
         echo "Downloading NDI SDK from S3..."
         aws s3 cp s3://html2ndi-sdk-private/ndi-sdk-apple.pkg /tmp/ndi-sdk.pkg
         sudo installer -pkg /tmp/ndi-sdk.pkg -target /
         rm /tmp/ndi-sdk.pkg
         echo "NDI SDK installed"
+
+    # Cache CEF
+    - name: Cache CEF
+      id: cache-cef
+      uses: actions/cache@v4
+      with:
+        path: build/cef
+        key: cef-${{ env.CEF_VERSION }}-macosarm64-v2
         
     - name: Build html2ndi
       run: |
@@ -45,6 +63,17 @@ jobs:
         cd build
         cmake .. -G Ninja -DCMAKE_BUILD_TYPE=Release
         ninja
+
+    # Cache Swift packages
+    - name: Cache Swift packages
+      uses: actions/cache@v4
+      with:
+        path: |
+          manager/.build
+          ~/Library/Caches/org.swift.swiftpm
+        key: swift-${{ runner.os }}-${{ hashFiles('manager/Package.swift') }}
+        restore-keys: |
+          swift-${{ runner.os }}-
         
     - name: Build Swift Manager
       run: |
