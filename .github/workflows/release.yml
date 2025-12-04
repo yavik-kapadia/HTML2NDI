@@ -14,6 +14,10 @@ on:
 env:
   CEF_VERSION: "120.1.10+g3ce3184+chromium-120.0.6099.129"
 
+permissions:
+  contents: write
+  id-token: write
+
 jobs:
   build:
     runs-on: macos-14  # Apple Silicon runner
@@ -35,25 +39,19 @@ jobs:
       run: |
         brew install cmake ninja librsvg
         
-    - name: Setup NDI SDK
-      env:
-        NDI_SDK_URL: ${{ secrets.NDI_SDK_URL }}
-      run: |
-        # NDI SDK can be provided via:
-        # 1. Secret URL (NDI_SDK_URL) pointing to the SDK package
-        # 2. Pre-installed on a self-hosted runner
+    - name: Configure AWS credentials (OIDC)
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        role-to-assume: arn:aws:iam::598063954204:role/HTML2NDI-GitHubActions
+        aws-region: us-east-1
         
-        if [ -n "$NDI_SDK_URL" ]; then
-          echo "Downloading NDI SDK from secret URL..."
-          curl -L "$NDI_SDK_URL" -o /tmp/ndi-sdk.pkg
-          sudo installer -pkg /tmp/ndi-sdk.pkg -target /
-          rm /tmp/ndi-sdk.pkg
-        elif [ -d "/Library/NDI SDK for Apple" ]; then
-          echo "NDI SDK already installed"
-        else
-          echo "::error::NDI SDK not available. Set NDI_SDK_URL secret or use self-hosted runner."
-          exit 1
-        fi
+    - name: Setup NDI SDK
+      run: |
+        echo "Downloading NDI SDK from S3..."
+        aws s3 cp s3://html2ndi-sdk-private/ndi-sdk-apple.pkg /tmp/ndi-sdk.pkg
+        sudo installer -pkg /tmp/ndi-sdk.pkg -target /
+        rm /tmp/ndi-sdk.pkg
+        echo "NDI SDK installed"
         
     - name: Download and extract CEF
       run: |
