@@ -2,8 +2,14 @@
  * Image encoding utilities using stb_image_write.
  */
 
+// Suppress sprintf deprecation warning in stb_image_write
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb_image_write.h"
+
+#pragma clang diagnostic pop
 
 #include <vector>
 #include <cstdint>
