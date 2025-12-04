@@ -1,0 +1,277 @@
+import Foundation
+import AppKit
+
+struct StreamConfig: Codable, Identifiable {
+    var id: UUID
+    var name: String
+    var url: String
+    var ndiName: String
+    var width: Int
+    var height: Int
+    var fps: Int
+    var colorPreset: String
+    var httpPort: Int
+    var autoStart: Bool
+    
+    init(name: String = "New Stream", url: String = "about:blank", ndiName: String = "HTML2NDI") {
+        self.id = UUID()
+        self.name = name
+        self.url = url
+        self.ndiName = ndiName
+        self.width = 1920
+        self.height = 1080
+        self.fps = 60
+        self.colorPreset = "rec709"
+        self.httpPort = 0 // Auto-assign
+        self.autoStart = false
+    }
+}
+
+class StreamInstance: ObservableObject, Identifiable {
+    let id: UUID
+    @Published var config: StreamConfig
+    @Published var isRunning: Bool = false
+    @Published var status: StreamStatus?
+    @Published var actualFps: Double = 0
+    @Published var connections: Int = 0
+    
+    var process: Process?
+    var httpPort: Int = 0
+    private var statusTimer: Timer?
+    
+    init(config: StreamConfig) {
+        self.id = config.id
+        self.config = config
+    }
+    
+    func start(workerPath: String) {
+        guard !isRunning else { return }
+        
+        // Find available port
+        httpPort = config.httpPort > 0 ? config.httpPort : findAvailablePort()
+        
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: workerPath)
+        process.arguments = [
+            "--url", config.url,
+            "--ndi-name", config.ndiName,
+            "--width", String(config.width),
+            "--height", String(config.height),
+            "--fps", String(config.fps),
+            "--http-port", String(httpPort)
+        ]
+        
+        // Capture output
+        let pipe = Pipe()
+        process.standardOutput = pipe
+        process.standardError = pipe
+        
+        process.terminationHandler = { [weak self] _ in
+            DispatchQueue.main.async {
+                self?.isRunning = false
+                self?.statusTimer?.invalidate()
+            }
+        }
+        
+        do {
+            try process.run()
+            self.process = process
+            isRunning = true
+            
+            // Apply color preset
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in
+                self?.applyColorPreset()
+                self?.startStatusPolling()
+            }
+            
+            print("Started stream '\(config.name)' on port \(httpPort)")
+        } catch {
+            print("Failed to start stream: \(error)")
+        }
+    }
+    
+    func stop() {
+        statusTimer?.invalidate()
+        process?.terminate()
+        process = nil
+        isRunning = false
+    }
+    
+    func applyColorPreset() {
+        guard httpPort > 0 else { return }
+        
+        let url = URL(string: "http://localhost:\(httpPort)/color")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try? JSONEncoder().encode(["preset": config.colorPreset])
+        
+        URLSession.shared.dataTask(with: request).resume()
+    }
+    
+    func setURL(_ newURL: String) {
+        guard httpPort > 0 else { return }
+        
+        config.url = newURL
+        
+        let url = URL(string: "http://localhost:\(httpPort)/seturl")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try? JSONEncoder().encode(["url": newURL])
+        
+        URLSession.shared.dataTask(with: request).resume()
+    }
+    
+    private func startStatusPolling() {
+        statusTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in
+            self?.fetchStatus()
+        }
+    }
+    
+    private func fetchStatus() {
+        guard httpPort > 0, isRunning else { return }
+        
+        let url = URL(string: "http://localhost:\(httpPort)/status")!
+        URLSession.shared.dataTask(with: url) { [weak self] data, _, _ in
+            guard let data = data,
+                  let status = try? JSONDecoder().decode(StreamStatus.self, from: data) else { return }
+            
+            DispatchQueue.main.async {
+                self?.status = status
+                self?.actualFps = status.actual_fps
+                self?.connections = status.ndi_connections
+            }
+        }.resume()
+    }
+    
+    private func findAvailablePort() -> Int {
+        // Start from 8081 and find available port
+        for port in 8081...8199 {
+            if isPortAvailable(port) {
+                return port
+            }
+        }
+        return 8081
+    }
+    
+    private func isPortAvailable(_ port: Int) -> Bool {
+        let socketFD = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)
+        guard socketFD != -1 else { return false }
+        defer { close(socketFD) }
+        
+        var addr = sockaddr_in()
+        addr.sin_len = UInt8(MemoryLayout<sockaddr_in>.size)
+        addr.sin_family = sa_family_t(AF_INET)
+        addr.sin_port = in_port_t(port).bigEndian
+        addr.sin_addr.s_addr = INADDR_ANY
+        
+        let result = withUnsafePointer(to: &addr) {
+            $0.withMemoryRebound(to: sockaddr.self, capacity: 1) {
+                bind(socketFD, $0, socklen_t(MemoryLayout<sockaddr_in>.size))
+            }
+        }
+        
+        return result == 0
+    }
+}
+
+struct StreamStatus: Codable {
+    let url: String
+    let width: Int
+    let height: Int
+    let fps: Int
+    let actual_fps: Double
+    let ndi_name: String
+    let ndi_connections: Int
+    let running: Bool
+    let color: ColorStatus?
+}
+
+struct ColorStatus: Codable {
+    let colorspace: String
+    let gamma: String
+    let range: String
+}
+
+class StreamManager: ObservableObject {
+    static let shared = StreamManager()
+    
+    @Published var streams: [StreamInstance] = []
+    
+    private var workerPath: String {
+        // Worker is bundled inside the app
+        if let bundlePath = Bundle.main.resourcePath {
+            return bundlePath + "/html2ndi.app/Contents/MacOS/html2ndi"
+        }
+        // Fallback to development path
+        return FileManager.default.currentDirectoryPath + "/build/bin/html2ndi.app/Contents/MacOS/html2ndi"
+    }
+    
+    private var configPath: URL {
+        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+        let dir = appSupport.appendingPathComponent("HTML2NDI", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir.appendingPathComponent("streams.json")
+    }
+    
+    func loadStreams() {
+        guard let data = try? Data(contentsOf: configPath),
+              let configs = try? JSONDecoder().decode([StreamConfig].self, from: data) else {
+            // Create default stream if none exist
+            addStream(StreamConfig(name: "Default", url: "about:blank", ndiName: "HTML2NDI"))
+            return
+        }
+        
+        streams = configs.map { StreamInstance(config: $0) }
+        
+        // Auto-start streams
+        for stream in streams where stream.config.autoStart {
+            stream.start(workerPath: workerPath)
+        }
+    }
+    
+    func saveStreams() {
+        let configs = streams.map { $0.config }
+        if let data = try? JSONEncoder().encode(configs) {
+            try? data.write(to: configPath)
+        }
+    }
+    
+    func addStream(_ config: StreamConfig = StreamConfig()) {
+        let instance = StreamInstance(config: config)
+        streams.append(instance)
+        saveStreams()
+    }
+    
+    func removeStream(_ stream: StreamInstance) {
+        stream.stop()
+        streams.removeAll { $0.id == stream.id }
+        saveStreams()
+    }
+    
+    func startStream(_ stream: StreamInstance) {
+        stream.start(workerPath: workerPath)
+    }
+    
+    func stopStream(_ stream: StreamInstance) {
+        stream.stop()
+    }
+    
+    func startAll() {
+        for stream in streams {
+            stream.start(workerPath: workerPath)
+        }
+    }
+    
+    func stopAll() {
+        for stream in streams {
+            stream.stop()
+        }
+    }
+    
+    var runningCount: Int {
+        streams.filter { $0.isRunning }.count
+    }
+}
+
