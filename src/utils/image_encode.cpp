@@ -17,16 +17,16 @@ static void write_to_vector(void* context, void* data, int size) {
     vec->insert(vec->end(), bytes, bytes + size);
 }
 
-bool encode_jpeg(const uint8_t* rgba_data, int width, int height, int quality, 
+bool encode_jpeg(const uint8_t* bgra_data, int width, int height, int quality, 
                  std::vector<uint8_t>& out_jpeg) {
     out_jpeg.clear();
     
-    // Convert RGBA to RGB (JPEG doesn't support alpha)
+    // Convert BGRA to RGB (CEF outputs BGRA on macOS, JPEG needs RGB)
     std::vector<uint8_t> rgb_data(width * height * 3);
     for (int i = 0; i < width * height; i++) {
-        rgb_data[i * 3 + 0] = rgba_data[i * 4 + 0]; // R
-        rgb_data[i * 3 + 1] = rgba_data[i * 4 + 1]; // G
-        rgb_data[i * 3 + 2] = rgba_data[i * 4 + 2]; // B
+        rgb_data[i * 3 + 0] = bgra_data[i * 4 + 2]; // R (from B position)
+        rgb_data[i * 3 + 1] = bgra_data[i * 4 + 1]; // G
+        rgb_data[i * 3 + 2] = bgra_data[i * 4 + 0]; // B (from R position)
     }
     
     int result = stbi_write_jpg_to_func(write_to_vector, &out_jpeg, 
@@ -34,13 +34,13 @@ bool encode_jpeg(const uint8_t* rgba_data, int width, int height, int quality,
     return result != 0;
 }
 
-bool encode_jpeg_scaled(const uint8_t* rgba_data, int width, int height, 
+bool encode_jpeg_scaled(const uint8_t* bgra_data, int width, int height, 
                         int target_width, int quality, std::vector<uint8_t>& out_jpeg) {
     // Simple box-filter downscale
     int target_height = (height * target_width) / width;
     if (target_width >= width) {
         // No scaling needed
-        return encode_jpeg(rgba_data, width, height, quality, out_jpeg);
+        return encode_jpeg(bgra_data, width, height, quality, out_jpeg);
     }
     
     float scale_x = static_cast<float>(width) / target_width;
@@ -55,9 +55,10 @@ bool encode_jpeg_scaled(const uint8_t* rgba_data, int width, int height,
             int src_idx = (src_y * width + src_x) * 4;
             int dst_idx = (y * target_width + x) * 3;
             
-            scaled[dst_idx + 0] = rgba_data[src_idx + 0]; // R
-            scaled[dst_idx + 1] = rgba_data[src_idx + 1]; // G
-            scaled[dst_idx + 2] = rgba_data[src_idx + 2]; // B
+            // BGRA to RGB conversion
+            scaled[dst_idx + 0] = bgra_data[src_idx + 2]; // R (from B position)
+            scaled[dst_idx + 1] = bgra_data[src_idx + 1]; // G
+            scaled[dst_idx + 2] = bgra_data[src_idx + 0]; // B (from R position)
         }
     }
     

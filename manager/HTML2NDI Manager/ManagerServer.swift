@@ -444,10 +444,33 @@ class ManagerServer {
             <script>
             let streams = [];
             
+            let lastRenderHash = '';
             async function load() {
                 const r = await fetch('/api/streams');
                 streams = await r.json();
-                render();
+                
+                // Only re-render if streams changed (not just stats)
+                const structureHash = streams.map(s => s.id + s.isRunning).join('|');
+                if (structureHash !== lastRenderHash) {
+                    lastRenderHash = structureHash;
+                    render();
+                } else {
+                    // Just update stats without re-rendering
+                    updateStats();
+                }
+            }
+            
+            function updateStats() {
+                streams.forEach(s => {
+                    const card = document.querySelector(`[data-stream-id="${s.id}"]`)?.closest('.card');
+                    if (!card) return;
+                    
+                    const stats = card.querySelectorAll('.stat-v');
+                    if (stats[0]) stats[0].textContent = s.isRunning ? 'Running' : 'Stopped';
+                    if (stats[0]) stats[0].style.color = s.isRunning ? 'var(--ok)' : 'var(--dim)';
+                    if (stats[1]) stats[1].textContent = s.actualFps?.toFixed(1) || '-';
+                    if (stats[2]) stats[2].textContent = s.connections || 0;
+                });
             }
             
             function render() {
@@ -464,9 +487,11 @@ class ManagerServer {
                         </div>
                         ${s.isRunning && s.httpPort > 0 ? `
                         <div style="margin-bottom:1rem;border-radius:8px;overflow:hidden;background:var(--input)">
-                            <img src="http://localhost:${s.httpPort}/thumbnail?width=400&t=${Date.now()}" 
+                            <img class="thumb" data-port="${s.httpPort}" 
+                                 src="http://localhost:${s.httpPort}/thumbnail?width=400" 
                                  style="width:100%;height:auto;display:block" 
-                                 onerror="this.style.display='none'" 
+                                 onerror="this.style.opacity='0.3'" 
+                                 onload="this.style.opacity='1'"
                                  alt="Preview">
                         </div>` : ''}
                         <div class="stats">
@@ -544,8 +569,18 @@ class ManagerServer {
             
             function toast(msg) { const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),3000); }
             
+            function refreshThumbnails() {
+                document.querySelectorAll('img.thumb').forEach(img => {
+                    const port = img.dataset.port;
+                    if (port) {
+                        img.src = `http://localhost:${port}/thumbnail?width=400&t=${Date.now()}`;
+                    }
+                });
+            }
+            
             load();
             setInterval(load, 2000);
+            setInterval(refreshThumbnails, 3000); // Refresh thumbnails every 3 seconds
             </script>
         </body>
         </html>

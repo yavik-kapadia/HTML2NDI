@@ -26,6 +26,9 @@ void CefAppImpl::OnBeforeCommandLineProcessing(
     command_line->AppendSwitch("disable-spell-checking");
     command_line->AppendSwitch("disable-popup-blocking");
     
+    // Use mock keychain to avoid macOS Keychain permission prompts
+    command_line->AppendSwitch("use-mock-keychain");
+    
     // Audio capture for potential NDI audio
     command_line->AppendSwitch("autoplay-policy=no-user-gesture-required");
     
