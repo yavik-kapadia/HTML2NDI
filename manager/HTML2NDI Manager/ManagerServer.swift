@@ -452,6 +452,10 @@ class ManagerServer {
             
             function render() {
                 const el = document.getElementById('streams');
+                const activeEl = document.activeElement;
+                const activeId = activeEl?.dataset?.streamId;
+                const activeValue = activeEl?.value;
+                
                 el.innerHTML = streams.map(s => `
                     <div class="card">
                         <div class="card-h">
@@ -464,7 +468,7 @@ class ManagerServer {
                             <div class="stat"><div class="stat-l">Connections</div><div class="stat-v">${s.connections||0}</div></div>
                         </div>
                         <div class="url-row">
-                            <input value="${s.url}" onchange="updateUrl('${s.id}',this.value)" placeholder="URL">
+                            <input id="url-${s.id}" data-stream-id="${s.id}" value="${s.url}" onchange="updateUrl('${s.id}',this.value)" placeholder="URL">
                             <button class="btn-s btn-sm" onclick="openControl('${s.httpPort}')">Control</button>
                         </div>
                         <div class="card-actions">
@@ -476,6 +480,16 @@ class ManagerServer {
                         </div>
                     </div>
                 `).join('');
+                
+                // Restore focus and value if user was editing
+                if (activeId) {
+                    const input = document.getElementById('url-' + activeId);
+                    if (input) {
+                        input.value = activeValue;
+                        input.focus();
+                        input.setSelectionRange(input.value.length, input.value.length);
+                    }
+                }
             }
             
             async function start(id) { await fetch('/api/streams/'+id+'/start',{method:'POST'}); toast('Stream started'); load(); }
