@@ -169,8 +169,8 @@ Open dashboard: `http://localhost:8080`
 
 ### Creating a Release
 ```bash
-git tag v1.0.0
-git push origin v1.0.0
+git tag v1.1.0
+git push origin v1.1.0
 ```
 
 Produces:
@@ -213,3 +213,6 @@ Produces:
 - Be concise with your documentation.
 - The commit should pass all tests before you merge.
 - Always run the linter before before you merge.
+- Do not hard code colors
+- Avoid Emojis
+- Increment versioning

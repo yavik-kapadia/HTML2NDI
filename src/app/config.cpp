@@ -13,7 +13,7 @@ namespace html2ndi {
 
 namespace {
 
-const char* VERSION = "1.0.0";
+const char* VERSION = "1.1.0";
 
 void print_arg(const char* short_opt, const char* long_opt, 
                const char* arg, const char* desc) {
