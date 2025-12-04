@@ -39,13 +39,13 @@ jobs:
       run: |
         brew install cmake ninja librsvg
 
-    # Cache NDI SDK
-    - name: Cache NDI SDK
+    # Cache NDI SDK package file (not the installed location - requires sudo)
+    - name: Cache NDI SDK package
       id: cache-ndi
       uses: actions/cache@v4
       with:
-        path: /Library/NDI SDK for Apple
-        key: ndi-sdk-apple-v6
+        path: ~/ndi-sdk-cache/ndi-sdk-apple.pkg
+        key: ndi-sdk-pkg-v6
         
     - name: Configure AWS credentials (OIDC)
       if: steps.cache-ndi.outputs.cache-hit != 'true'
@@ -54,13 +54,17 @@ jobs:
         role-to-assume: arn:aws:iam::598063954204:role/HTML2NDI-GitHubActions
         aws-region: us-east-1
         
-    - name: Setup NDI SDK
+    - name: Download NDI SDK
       if: steps.cache-ndi.outputs.cache-hit != 'true'
       run: |
+        mkdir -p ~/ndi-sdk-cache
         echo "Downloading NDI SDK from S3..."
-        aws s3 cp s3://html2ndi-sdk-private/ndi-sdk-apple.pkg /tmp/ndi-sdk.pkg
-        sudo installer -pkg /tmp/ndi-sdk.pkg -target /
-        rm /tmp/ndi-sdk.pkg
+        aws s3 cp s3://html2ndi-sdk-private/ndi-sdk-apple.pkg ~/ndi-sdk-cache/ndi-sdk-apple.pkg
+        
+    - name: Install NDI SDK
+      run: |
+        echo "Installing NDI SDK..."
+        sudo installer -pkg ~/ndi-sdk-cache/ndi-sdk-apple.pkg -target /
         echo "NDI SDK installed"
 
     # Cache CEF

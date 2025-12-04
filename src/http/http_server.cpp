@@ -211,6 +211,9 @@ void HttpServer::setup_routes() {
         add_cors(res);
         
         auto* ndi = app_->ndi_sender();
+        std::string groups = app_->config().ndi_groups;
+        if (groups.empty()) groups = "public";
+        
         json status = {
             {"url", app_->current_url()},
             {"width", app_->config().width},
@@ -218,6 +221,7 @@ void HttpServer::setup_routes() {
             {"fps", app_->config().fps},
             {"actual_fps", app_->current_fps()},
             {"ndi_name", app_->config().ndi_name},
+            {"ndi_groups", groups},
             {"ndi_connections", app_->ndi_connection_count()},
             {"running", !app_->is_shutting_down()},
             {"color", {
@@ -316,6 +320,20 @@ void HttpServer::setup_routes() {
             res.status = 503;
             res.set_content(R"({"error": "No frame available"})", "application/json");
         }
+    });
+    
+    // GET /groups - Get NDI access groups
+    server_->Get("/groups", [this, add_cors](const httplib::Request&, httplib::Response& res) {
+        add_cors(res);
+        
+        std::string groups = app_->config().ndi_groups;
+        if (groups.empty()) groups = "public";
+        
+        json response = {
+            {"groups", groups},
+            {"note", "Use 'public' for all groups. Groups can only be set at startup."}
+        };
+        res.set_content(response.dump(2), "application/json");
     });
     
     // GET /color - Get current color settings

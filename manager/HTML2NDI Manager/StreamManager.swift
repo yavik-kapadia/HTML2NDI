@@ -6,6 +6,7 @@ struct StreamConfig: Codable, Identifiable {
     var name: String
     var url: String
     var ndiName: String
+    var ndiGroups: String  // NDI access groups (comma-separated), "public" for all
     var width: Int
     var height: Int
     var fps: Int
@@ -13,13 +14,14 @@ struct StreamConfig: Codable, Identifiable {
     var httpPort: Int
     var autoStart: Bool
     
-    init(name: String? = nil, url: String = "about:blank", ndiName: String? = nil) {
+    init(name: String? = nil, url: String = "about:blank", ndiName: String? = nil, ndiGroups: String = "public") {
         self.id = UUID()
         // Generate unique name if not provided
         let shortId = String(self.id.uuidString.prefix(8))
         self.name = (name?.isEmpty ?? true) ? "Stream-\(shortId)" : name!
         self.url = url
         self.ndiName = (ndiName?.isEmpty ?? true) ? "NDI-\(shortId)" : ndiName!
+        self.ndiGroups = ndiGroups.isEmpty ? "public" : ndiGroups
         self.width = 1920
         self.height = 1080
         self.fps = 60
@@ -60,7 +62,8 @@ class StreamInstance: ObservableObject, Identifiable {
         
         let process = Process()
         process.executableURL = URL(fileURLWithPath: workerPath)
-        process.arguments = [
+        
+        var args = [
             "--url", config.url,
             "--ndi-name", config.ndiName,
             "--width", String(config.width),
@@ -69,6 +72,13 @@ class StreamInstance: ObservableObject, Identifiable {
             "--http-port", String(httpPort),
             "--cache-path", cacheDir.path
         ]
+        
+        // Add NDI groups if not "public" (public means all groups)
+        if !config.ndiGroups.isEmpty && config.ndiGroups.lowercased() != "public" {
+            args.append(contentsOf: ["--ndi-groups", config.ndiGroups])
+        }
+        
+        process.arguments = args
         
         // Capture output
         let pipe = Pipe()

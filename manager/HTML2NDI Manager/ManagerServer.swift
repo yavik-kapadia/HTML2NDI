@@ -153,6 +153,7 @@ class ManagerServer {
                 "name": stream.config.name,
                 "url": stream.config.url,
                 "ndiName": stream.config.ndiName,
+                "ndiGroups": stream.config.ndiGroups,
                 "width": stream.config.width,
                 "height": stream.config.height,
                 "fps": stream.config.fps,
@@ -181,7 +182,8 @@ class ManagerServer {
         var config = StreamConfig(
             name: json["name"] as? String,
             url: json["url"] as? String ?? "about:blank",
-            ndiName: json["ndiName"] as? String
+            ndiName: json["ndiName"] as? String,
+            ndiGroups: json["ndiGroups"] as? String ?? "public"
         )
         config.width = json["width"] as? Int ?? 1920
         config.height = json["height"] as? Int ?? 1080
@@ -288,6 +290,13 @@ class ManagerServer {
                 }
                 stream.config.ndiName = ndiName 
             }
+            if let ndiGroups = json["ndiGroups"] as? String {
+                let groups = ndiGroups.isEmpty ? "public" : ndiGroups
+                if stream.config.ndiGroups != groups && stream.isRunning {
+                    needsRestart = true
+                }
+                stream.config.ndiGroups = groups
+            }
             if let width = json["width"] as? Int { stream.config.width = width }
             if let height = json["height"] as? Int { stream.config.height = height }
             if let fps = json["fps"] as? Int { stream.config.fps = fps }
@@ -301,7 +310,7 @@ class ManagerServer {
         }
         
         if needsRestart {
-            return "{\"success\": true, \"needsRestart\": true, \"message\": \"NDI name change requires restart\"}"
+            return "{\"success\": true, \"needsRestart\": true, \"message\": \"NDI settings change requires restart\"}"
         }
         return "{\"success\": true}"
     }
@@ -433,6 +442,7 @@ class ManagerServer {
                     <div class="form-g"><label>Stream Name</label><input id="newName" placeholder="My Graphics"></div>
                     <div class="form-g"><label>Source URL</label><input id="newUrl" placeholder="http://localhost:9090/graphics.html"></div>
                     <div class="form-g"><label>NDI Source Name</label><input id="newNdi" placeholder="Graphics"></div>
+                    <div class="form-g"><label>NDI Access Group</label><input id="newGroups" value="public" placeholder="public" title="Comma-separated groups. Use 'public' for all receivers."></div>
                     <div class="form-row">
                         <div class="form-g"><label>Width</label><input id="newW" type="number" value="1920"></div>
                         <div class="form-g"><label>Height</label><input id="newH" type="number" value="1080"></div>
@@ -502,9 +512,13 @@ class ManagerServer {
                                  onload="this.style.opacity='1'"
                                  alt="Preview">
                         </div>` : ''}
-                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem;margin-bottom:1rem">
+                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem;margin-bottom:.5rem">
                             <div><label style="font-size:.7rem;color:var(--dim);text-transform:uppercase">Stream Name</label><input id="name-${s.id}" data-stream-id="${s.id}" data-field="name" value="${s.name||''}" onchange="updateField('${s.id}','name',this.value)" placeholder="Stream Name" style="width:100%"></div>
-                            <div><label style="font-size:.7rem;color:var(--dim);text-transform:uppercase">NDI Source</label><input id="ndi-${s.id}" data-stream-id="${s.id}" data-field="ndiName" value="${s.ndiName}" onchange="updateField('${s.id}','ndiName',this.value)" placeholder="NDI Name" style="width:100%"></div>
+                            <div><label style="font-size:.7rem;color:var(--dim);text-transform:uppercase">NDI Source</label><input id="ndiName-${s.id}" data-stream-id="${s.id}" data-field="ndiName" value="${s.ndiName}" onchange="updateField('${s.id}','ndiName',this.value)" placeholder="NDI Name" style="width:100%"></div>
+                        </div>
+                        <div style="margin-bottom:1rem">
+                            <label style="font-size:.7rem;color:var(--dim);text-transform:uppercase">NDI Access Group</label>
+                            <input id="ndiGroups-${s.id}" data-stream-id="${s.id}" data-field="ndiGroups" value="${s.ndiGroups||'public'}" onchange="updateField('${s.id}','ndiGroups',this.value)" placeholder="public" style="width:100%" title="Comma-separated groups. Use 'public' for all.">
                         </div>
                         <div class="stats">
                             <div class="stat"><div class="stat-l">Status</div><div class="stat-v" style="color:${s.isRunning?'var(--ok)':'var(--dim)'}">${s.isRunning?'Running':'Stopped'}</div></div>
@@ -549,9 +563,10 @@ class ManagerServer {
                 const res = await fetch('/api/streams/'+id,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
                 const result = await res.json();
                 if (result.success) {
-                    toast(field === 'url' ? 'URL updated' : field === 'name' ? 'Name updated' : 'NDI name updated');
-                    if (field === 'ndiName' && result.needsRestart) {
-                        toast('Restart stream to apply NDI name change');
+                    const msgs = {url:'URL updated',name:'Name updated',ndiName:'NDI name updated',ndiGroups:'Access group updated'};
+                    toast(msgs[field] || 'Updated');
+                    if ((field === 'ndiName' || field === 'ndiGroups') && result.needsRestart) {
+                        toast('Restart stream to apply changes');
                     }
                 } else {
                     toast(result.error || 'Failed to update');
@@ -569,6 +584,7 @@ class ManagerServer {
                     name: document.getElementById('newName').value,
                     url: document.getElementById('newUrl').value || 'about:blank',
                     ndiName: document.getElementById('newNdi').value,
+                    ndiGroups: document.getElementById('newGroups').value || 'public',
                     width: parseInt(document.getElementById('newW').value) || 1920,
                     height: parseInt(document.getElementById('newH').value) || 1080,
                     fps: parseInt(document.getElementById('newFps').value) || 60,
@@ -584,6 +600,7 @@ class ManagerServer {
                     document.getElementById('newName').value = '';
                     document.getElementById('newUrl').value = '';
                     document.getElementById('newNdi').value = '';
+                    document.getElementById('newGroups').value = 'public';
                 } else {
                     toast(result.error || 'Failed to add stream', 'error');
                 }
