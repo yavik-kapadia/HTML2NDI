@@ -58,12 +58,8 @@ bool OffscreenRenderer::initialize() {
     settings.no_sandbox = true;
     settings.windowless_rendering_enabled = true;
     settings.command_line_args_disabled = false;
-    settings.remote_debugging_port = config_.devtools_port;
+    settings.remote_debugging_port = 0; // Disable remote debugging
     settings.log_severity = static_cast<cef_log_severity_t>(config_.cef_log_severity);
-    
-    if (config_.devtools_port > 0) {
-        LOG_INFO("CEF DevTools enabled on port %d", config_.devtools_port);
-    }
     
     // Only set main_bundle_path - let CefScopedLibraryLoader handle the rest
     CefString(&settings.main_bundle_path).FromString(bundle_dir.string());
@@ -96,12 +92,11 @@ bool OffscreenRenderer::initialize() {
     
     LOG_DEBUG("CEF initialized");
     
-    // Create browser handler with target FPS for continuous invalidation
+    // Create browser handler
     handler_ = new CefHandler(
         config_.width, 
         config_.height, 
-        frame_callback_,
-        config_.fps
+        frame_callback_
     );
     
     // Browser window info (off-screen)

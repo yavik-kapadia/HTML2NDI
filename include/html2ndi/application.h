@@ -14,7 +14,6 @@ class NdiSender;
 class FramePump;
 class HttpServer;
 class Logger;
-class Watchdog;
 
 /**
  * Main application class.
@@ -99,57 +98,6 @@ public:
      * @return true if thumbnail was generated
      */
     bool get_thumbnail(std::vector<uint8_t>& out_jpeg, int width = 320, int quality = 75);
-    
-    /**
-     * Frame statistics structure.
-     */
-    struct FrameStats {
-        uint64_t frames_sent{0};
-        uint64_t frames_dropped{0};
-        double drop_rate{0.0};
-        double uptime_seconds{0.0};
-        uint64_t bandwidth_bytes_per_sec{0};
-    };
-    
-    /**
-     * Get frame statistics.
-     */
-    FrameStats get_frame_stats() const;
-    
-    /**
-     * Execute JavaScript in the browser.
-     * @param code JavaScript code to execute
-     */
-    void execute_javascript(const std::string& code);
-    
-    /**
-     * Console message structure.
-     */
-    struct ConsoleMessage {
-        std::string level;
-        std::string message;
-        std::string source;
-        int line;
-        int64_t timestamp;
-    };
-    
-    /**
-     * Get console messages from the browser.
-     * @param max_count Maximum number of messages (0 = all)
-     * @param clear Whether to clear messages after retrieval
-     * @return Vector of console messages
-     */
-    std::vector<ConsoleMessage> get_console_messages(size_t max_count = 0, bool clear = false);
-    
-    /**
-     * Clear console messages.
-     */
-    void clear_console_messages();
-    
-    /**
-     * Get console message count.
-     */
-    size_t get_console_message_count() const;
 
 private:
     Config config_;
@@ -159,7 +107,6 @@ private:
     std::unique_ptr<NdiSender> ndi_sender_;
     std::unique_ptr<FramePump> frame_pump_;
     std::unique_ptr<HttpServer> http_server_;
-    std::unique_ptr<Watchdog> watchdog_;
     
     // Actual measured FPS
     std::atomic<float> actual_fps_{0.0f};

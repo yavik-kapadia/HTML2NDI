@@ -135,6 +135,152 @@ stat();setInterval(stat,2000);$('url').addEventListener('keypress',e=>{if(e.key=
 </html>
 )HTMLEND";
 
+// Test card HTML - shown when no URL is configured
+static const char* TEST_CARD_HTML_TEMPLATE = R"HTMLEND(
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>%NDI_NAME% - Test Card</title>
+    <style>
+        *{margin:0;padding:0;box-sizing:border-box}
+        html,body{width:100%%;height:100%%;overflow:hidden;font-family:'SF Pro Display',-apple-system,system-ui,sans-serif}
+        body{background:#111;display:flex;flex-direction:column}
+        
+        /* SMPTE Color Bars */
+        .bars{display:flex;flex:1;min-height:0}
+        .bar{flex:1}
+        .bar1{background:#c0c0c0} /* 75%% White */
+        .bar2{background:#c0c000} /* Yellow */
+        .bar3{background:#00c0c0} /* Cyan */
+        .bar4{background:#00c000} /* Green */
+        .bar5{background:#c000c0} /* Magenta */
+        .bar6{background:#c00000} /* Red */
+        .bar7{background:#0000c0} /* Blue */
+        
+        /* Info overlay */
+        .info{
+            position:absolute;
+            top:50%%;left:50%%;
+            transform:translate(-50%%,-50%%);
+            background:rgba(0,0,0,0.85);
+            border:2px solid rgba(255,255,255,0.3);
+            border-radius:16px;
+            padding:2.5rem 4rem;
+            text-align:center;
+            color:#fff;
+            backdrop-filter:blur(10px);
+            box-shadow:0 20px 60px rgba(0,0,0,0.5);
+        }
+        
+        .ndi-name{
+            font-size:2.5rem;
+            font-weight:700;
+            margin-bottom:0.5rem;
+            background:linear-gradient(135deg,#6366f1,#8b5cf6);
+            -webkit-background-clip:text;
+            -webkit-text-fill-color:transparent;
+        }
+        
+        .stream-name{
+            font-size:1.1rem;
+            color:#a1a1aa;
+            margin-bottom:1.5rem;
+        }
+        
+        .time{
+            font-family:'SF Mono',ui-monospace,monospace;
+            font-size:4rem;
+            font-weight:200;
+            letter-spacing:-0.02em;
+            margin-bottom:0.5rem;
+        }
+        
+        .date{
+            font-size:1rem;
+            color:#71717a;
+            margin-bottom:1.5rem;
+        }
+        
+        .resolution{
+            display:inline-block;
+            padding:0.5rem 1rem;
+            background:rgba(99,102,241,0.2);
+            border:1px solid rgba(99,102,241,0.3);
+            border-radius:8px;
+            font-size:0.9rem;
+            color:#a5b4fc;
+            font-family:ui-monospace,monospace;
+        }
+        
+        /* Bottom bar */
+        .bottom{
+            height:60px;
+            display:flex;
+            background:#000;
+        }
+        .bottom-bar{flex:1}
+        .bb1{background:#0000c0}
+        .bb2{background:#111}
+        .bb3{background:#c000c0}
+        .bb4{background:#111}
+        .bb5{background:#00c0c0}
+        .bb6{background:#111}
+        .bb7{background:#c0c0c0}
+        
+        /* Animated glow */
+        @keyframes glow{
+            0%%,100%%{box-shadow:0 0 20px rgba(99,102,241,0.3)}
+            50%%{box-shadow:0 0 40px rgba(99,102,241,0.5)}
+        }
+        .info{animation:glow 3s ease-in-out infinite}
+    </style>
+</head>
+<body>
+    <div class="bars">
+        <div class="bar bar1"></div>
+        <div class="bar bar2"></div>
+        <div class="bar bar3"></div>
+        <div class="bar bar4"></div>
+        <div class="bar bar5"></div>
+        <div class="bar bar6"></div>
+        <div class="bar bar7"></div>
+    </div>
+    
+    <div class="info">
+        <div class="ndi-name">%NDI_NAME%</div>
+        <div class="stream-name">HTML2NDI Test Card</div>
+        <div class="time" id="time">--:--:--</div>
+        <div class="date" id="date">---</div>
+        <div class="resolution">%WIDTH% x %HEIGHT% @ %FPS%fps</div>
+    </div>
+    
+    <div class="bottom">
+        <div class="bottom-bar bb1"></div>
+        <div class="bottom-bar bb2"></div>
+        <div class="bottom-bar bb3"></div>
+        <div class="bottom-bar bb4"></div>
+        <div class="bottom-bar bb5"></div>
+        <div class="bottom-bar bb6"></div>
+        <div class="bottom-bar bb7"></div>
+    </div>
+    
+    <script>
+        function updateTime() {
+            const now = new Date();
+            const time = now.toLocaleTimeString('en-US', {hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit'});
+            const date = now.toLocaleDateString('en-US', {weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'});
+            document.getElementById('time').textContent = time;
+            document.getElementById('date').textContent = date;
+        }
+        updateTime();
+        setInterval(updateTime, 1000);
+    </script>
+</body>
+</html>
+)HTMLEND";
+
 HttpServer::HttpServer(Application* app, const std::string& host, uint16_t port)
     : app_(app)
     , host_(host)
@@ -196,7 +342,7 @@ void HttpServer::setup_routes() {
     // CORS headers
     auto add_cors = [](httplib::Response& res) {
         res.set_header("Access-Control-Allow-Origin", "*");
-        res.set_header("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS");
+        res.set_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
         res.set_header("Access-Control-Allow-Headers", "Content-Type");
     };
     
@@ -206,20 +352,11 @@ void HttpServer::setup_routes() {
         res.status = 204;
     });
     
-    // GET /status - Get current status with full statistics
+    // GET /status - Get current status
     server_->Get("/status", [this, add_cors](const httplib::Request&, httplib::Response& res) {
         add_cors(res);
         
         auto* ndi = app_->ndi_sender();
-        std::string groups = app_->config().ndi_groups;
-        if (groups.empty()) groups = "public";
-        
-        // Get tally state
-        auto tally = ndi->get_tally(0);
-        
-        // Get frame statistics
-        auto stats = app_->get_frame_stats();
-        
         json status = {
             {"url", app_->current_url()},
             {"width", app_->config().width},
@@ -227,21 +364,8 @@ void HttpServer::setup_routes() {
             {"fps", app_->config().fps},
             {"actual_fps", app_->current_fps()},
             {"ndi_name", app_->config().ndi_name},
-            {"ndi_source", ndi->get_source_name()},
-            {"ndi_groups", groups},
             {"ndi_connections", app_->ndi_connection_count()},
             {"running", !app_->is_shutting_down()},
-            {"tally", {
-                {"on_program", tally.on_program},
-                {"on_preview", tally.on_preview}
-            }},
-            {"stats", {
-                {"frames_sent", stats.frames_sent},
-                {"frames_dropped", stats.frames_dropped},
-                {"drop_rate", stats.drop_rate},
-                {"uptime_seconds", stats.uptime_seconds},
-                {"bandwidth_mbps", stats.bandwidth_bytes_per_sec / 1000000.0}
-            }},
             {"color", {
                 {"colorspace", ndi->color_space_name()},
                 {"gamma", ndi->gamma_mode_name()},
@@ -250,78 +374,6 @@ void HttpServer::setup_routes() {
         };
         
         res.set_content(status.dump(2), "application/json");
-    });
-    
-    // GET /metrics - Prometheus-compatible metrics endpoint
-    server_->Get("/metrics", [this, add_cors](const httplib::Request&, httplib::Response& res) {
-        add_cors(res);
-        
-        auto* ndi = app_->ndi_sender();
-        auto tally = ndi->get_tally(0);
-        auto stats = app_->get_frame_stats();
-        
-        std::string ndi_name = app_->config().ndi_name;
-        
-        // Format: metric_name{labels} value
-        std::ostringstream metrics;
-        
-        metrics << "# HELP html2ndi_info NDI stream information\n";
-        metrics << "# TYPE html2ndi_info gauge\n";
-        metrics << "html2ndi_info{ndi_name=\"" << ndi_name << "\",url=\"" << app_->current_url() << "\"} 1\n\n";
-        
-        metrics << "# HELP html2ndi_running Whether the stream is running\n";
-        metrics << "# TYPE html2ndi_running gauge\n";
-        metrics << "html2ndi_running{ndi_name=\"" << ndi_name << "\"} " << (app_->is_shutting_down() ? 0 : 1) << "\n\n";
-        
-        metrics << "# HELP html2ndi_ndi_connections Number of NDI receivers connected\n";
-        metrics << "# TYPE html2ndi_ndi_connections gauge\n";
-        metrics << "html2ndi_ndi_connections{ndi_name=\"" << ndi_name << "\"} " << app_->ndi_connection_count() << "\n\n";
-        
-        metrics << "# HELP html2ndi_tally_program Whether stream is on program output\n";
-        metrics << "# TYPE html2ndi_tally_program gauge\n";
-        metrics << "html2ndi_tally_program{ndi_name=\"" << ndi_name << "\"} " << (tally.on_program ? 1 : 0) << "\n\n";
-        
-        metrics << "# HELP html2ndi_tally_preview Whether stream is on preview output\n";
-        metrics << "# TYPE html2ndi_tally_preview gauge\n";
-        metrics << "html2ndi_tally_preview{ndi_name=\"" << ndi_name << "\"} " << (tally.on_preview ? 1 : 0) << "\n\n";
-        
-        metrics << "# HELP html2ndi_fps_target Target frames per second\n";
-        metrics << "# TYPE html2ndi_fps_target gauge\n";
-        metrics << "html2ndi_fps_target{ndi_name=\"" << ndi_name << "\"} " << app_->config().fps << "\n\n";
-        
-        metrics << "# HELP html2ndi_fps_actual Actual frames per second\n";
-        metrics << "# TYPE html2ndi_fps_actual gauge\n";
-        metrics << "html2ndi_fps_actual{ndi_name=\"" << ndi_name << "\"} " << app_->current_fps() << "\n\n";
-        
-        metrics << "# HELP html2ndi_resolution_width Video width in pixels\n";
-        metrics << "# TYPE html2ndi_resolution_width gauge\n";
-        metrics << "html2ndi_resolution_width{ndi_name=\"" << ndi_name << "\"} " << app_->config().width << "\n\n";
-        
-        metrics << "# HELP html2ndi_resolution_height Video height in pixels\n";
-        metrics << "# TYPE html2ndi_resolution_height gauge\n";
-        metrics << "html2ndi_resolution_height{ndi_name=\"" << ndi_name << "\"} " << app_->config().height << "\n\n";
-        
-        metrics << "# HELP html2ndi_frames_sent_total Total frames sent\n";
-        metrics << "# TYPE html2ndi_frames_sent_total counter\n";
-        metrics << "html2ndi_frames_sent_total{ndi_name=\"" << ndi_name << "\"} " << stats.frames_sent << "\n\n";
-        
-        metrics << "# HELP html2ndi_frames_dropped_total Total frames dropped\n";
-        metrics << "# TYPE html2ndi_frames_dropped_total counter\n";
-        metrics << "html2ndi_frames_dropped_total{ndi_name=\"" << ndi_name << "\"} " << stats.frames_dropped << "\n\n";
-        
-        metrics << "# HELP html2ndi_drop_rate Frame drop rate (0-1)\n";
-        metrics << "# TYPE html2ndi_drop_rate gauge\n";
-        metrics << "html2ndi_drop_rate{ndi_name=\"" << ndi_name << "\"} " << stats.drop_rate << "\n\n";
-        
-        metrics << "# HELP html2ndi_uptime_seconds Stream uptime in seconds\n";
-        metrics << "# TYPE html2ndi_uptime_seconds counter\n";
-        metrics << "html2ndi_uptime_seconds{ndi_name=\"" << ndi_name << "\"} " << stats.uptime_seconds << "\n\n";
-        
-        metrics << "# HELP html2ndi_bandwidth_bytes_per_second Estimated bandwidth in bytes/sec\n";
-        metrics << "# TYPE html2ndi_bandwidth_bytes_per_second gauge\n";
-        metrics << "html2ndi_bandwidth_bytes_per_second{ndi_name=\"" << ndi_name << "\"} " << stats.bandwidth_bytes_per_sec << "\n";
-        
-        res.set_content(metrics.str(), "text/plain; version=0.0.4; charset=utf-8");
     });
     
     // POST /seturl - Set URL to load
@@ -410,20 +462,6 @@ void HttpServer::setup_routes() {
             res.status = 503;
             res.set_content(R"({"error": "No frame available"})", "application/json");
         }
-    });
-    
-    // GET /groups - Get NDI access groups
-    server_->Get("/groups", [this, add_cors](const httplib::Request&, httplib::Response& res) {
-        add_cors(res);
-        
-        std::string groups = app_->config().ndi_groups;
-        if (groups.empty()) groups = "public";
-        
-        json response = {
-            {"groups", groups},
-            {"note", "Use 'public' for all groups. Groups can only be set at startup."}
-        };
-        res.set_content(response.dump(2), "application/json");
     });
     
     // GET /color - Get current color settings
@@ -515,87 +553,33 @@ void HttpServer::setup_routes() {
         }
     });
     
-    // POST /execute - Execute JavaScript in the browser
-    server_->Post("/execute", [this, add_cors](const httplib::Request& req, httplib::Response& res) {
-        add_cors(res);
-        
-        try {
-            auto body = json::parse(req.body);
-            
-            if (!body.contains("code") || !body["code"].is_string()) {
-                res.status = 400;
-                res.set_content(R"({"error": "Missing 'code' field"})", "application/json");
-                return;
-            }
-            
-            std::string code = body["code"].get<std::string>();
-            
-            LOG_INFO("HTTP API: execute JavaScript (%zu chars)", code.length());
-            app_->execute_javascript(code);
-            
-            json response = {
-                {"success", true},
-                {"code_length", code.length()}
-            };
-            res.set_content(response.dump(), "application/json");
-            
-        } catch (const json::exception& e) {
-            res.status = 400;
-            json error = {{"error", e.what()}};
-            res.set_content(error.dump(), "application/json");
-        }
-    });
-    
-    // GET /console - Get console messages
-    server_->Get("/console", [this, add_cors](const httplib::Request& req, httplib::Response& res) {
-        add_cors(res);
-        
-        size_t limit = 100;
-        bool clear = false;
-        
-        if (req.has_param("limit")) {
-            limit = std::stoul(req.get_param_value("limit"));
-        }
-        if (req.has_param("clear")) {
-            clear = req.get_param_value("clear") == "true" || req.get_param_value("clear") == "1";
-        }
-        
-        auto messages = app_->get_console_messages(limit, clear);
-        
-        json messages_array = json::array();
-        for (const auto& msg : messages) {
-            messages_array.push_back({
-                {"level", msg.level},
-                {"message", msg.message},
-                {"source", msg.source},
-                {"line", msg.line},
-                {"timestamp", msg.timestamp}
-            });
-        }
-        
-        json response = {
-            {"count", messages.size()},
-            {"total", app_->get_console_message_count()},
-            {"messages", messages_array}
-        };
-        
-        res.set_content(response.dump(2), "application/json");
-    });
-    
-    // DELETE /console - Clear console messages
-    server_->Delete("/console", [this, add_cors](const httplib::Request&, httplib::Response& res) {
-        add_cors(res);
-        
-        app_->clear_console_messages();
-        
-        json response = {{"success", true}};
-        res.set_content(response.dump(), "application/json");
-    });
-    
     // GET / - Control Panel GUI
     server_->Get("/", [add_cors](const httplib::Request&, httplib::Response& res) {
         add_cors(res);
         res.set_content(CONTROL_PANEL_HTML, "text/html");
+    });
+    
+    // GET /testcard - Test card page with time and stream info
+    server_->Get("/testcard", [this, add_cors](const httplib::Request&, httplib::Response& res) {
+        add_cors(res);
+        
+        // Replace placeholders with actual values
+        std::string html = TEST_CARD_HTML_TEMPLATE;
+        
+        auto replace_all = [&html](const std::string& from, const std::string& to) {
+            size_t pos = 0;
+            while ((pos = html.find(from, pos)) != std::string::npos) {
+                html.replace(pos, from.length(), to);
+                pos += to.length();
+            }
+        };
+        
+        replace_all("%NDI_NAME%", app_->config().ndi_name);
+        replace_all("%WIDTH%", std::to_string(app_->config().width));
+        replace_all("%HEIGHT%", std::to_string(app_->config().height));
+        replace_all("%FPS%", std::to_string(app_->config().fps));
+        
+        res.set_content(html, "text/html");
     });
     
     // Error handler

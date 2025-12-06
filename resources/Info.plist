@@ -17,9 +17,9 @@
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
-	<string>1.3.0</string>
+	<string>1.4.0</string>
 	<key>CFBundleVersion</key>
-	<string>4</string>
+	<string>5</string>
 	<key>LSMinimumSystemVersion</key>
 	<string>11.0</string>
 	<key>NSHighResolutionCapable</key>
@@ -28,6 +28,24 @@
 	<true/>
 	<key>LSUIElement</key>
 	<true/>
+	
+	<!-- Network permissions for HTTP control API and NDI -->
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>HTML2NDI needs local network access for HTTP control API and NDI video streaming.</string>
+	
+	<!-- Bonjour services for NDI discovery (mDNS) -->
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_ndi._tcp</string>
+		<string>_http._tcp</string>
+	</array>
+	
+	<!-- App Transport Security - allow localhost HTTP -->
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
 </dict>
 </plist>
 

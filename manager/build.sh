@@ -43,6 +43,9 @@ cp ".build/release/HTML2NDI Manager" "$MACOS/"
 # Copy Info.plist
 cp "HTML2NDI Manager/Info.plist" "$CONTENTS/"
 
+# Copy app icon
+cp "Resources/AppIcon.icns" "$RESOURCES/"
+
 # Copy the html2ndi worker app bundle
 echo ""
 echo "Step 3: Bundling html2ndi worker..."

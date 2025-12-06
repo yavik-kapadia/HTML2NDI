@@ -93,42 +93,6 @@ TEST_F(HttpApiTest, ColorPresets) {
     EXPECT_EQ(valid_presets.size(), 4);
 }
 
-TEST_F(HttpApiTest, ExecuteEndpointFormat) {
-    // This test documents the expected /execute request format
-    json request = {
-        {"code", "console.log('Hello from HTML2NDI');"}
-    };
-    
-    EXPECT_TRUE(request.contains("code"));
-    EXPECT_TRUE(request["code"].is_string());
-}
-
-TEST_F(HttpApiTest, ConsoleEndpointParams) {
-    // This test documents the expected /console query parameters
-    std::string endpoint = "/console?limit=100&clear=false";
-    
-    // Parameters: limit (default 100), clear (default false)
-    EXPECT_TRUE(endpoint.find("limit=") != std::string::npos);
-    EXPECT_TRUE(endpoint.find("clear=") != std::string::npos);
-}
-
-TEST_F(HttpApiTest, ConsoleMessageFormat) {
-    // Document expected console message structure
-    json expected_message = {
-        {"level", "INFO"},
-        {"message", "test message"},
-        {"source", "https://example.com/script.js"},
-        {"line", 42},
-        {"timestamp", 1234567890}
-    };
-    
-    EXPECT_TRUE(expected_message.contains("level"));
-    EXPECT_TRUE(expected_message.contains("message"));
-    EXPECT_TRUE(expected_message.contains("source"));
-    EXPECT_TRUE(expected_message.contains("line"));
-    EXPECT_TRUE(expected_message.contains("timestamp"));
-}
-
 // Integration test that runs only if server is available
 TEST_F(HttpApiTest, DISABLED_LiveStatusEndpoint) {
     // This test is disabled by default
@@ -144,38 +108,5 @@ TEST_F(HttpApiTest, DISABLED_LiveStatusEndpoint) {
     EXPECT_TRUE(body.contains("url"));
     EXPECT_TRUE(body.contains("running"));
     EXPECT_TRUE(body.contains("ndi_name"));
-}
-
-TEST_F(HttpApiTest, DISABLED_LiveExecuteEndpoint) {
-    // This test is disabled by default
-    // Enable by removing DISABLED_ prefix when testing against live server
-    
-    httplib::Client cli("localhost", 8080);
-    
-    json request = {{"code", "console.log('Test from HTML2NDI API');"}};
-    auto res = cli.Post("/execute", request.dump(), "application/json");
-    
-    ASSERT_NE(res, nullptr);
-    ASSERT_EQ(res->status, 200);
-    
-    auto body = json::parse(res->body);
-    EXPECT_TRUE(body["success"].get<bool>());
-}
-
-TEST_F(HttpApiTest, DISABLED_LiveConsoleEndpoint) {
-    // This test is disabled by default
-    // Enable by removing DISABLED_ prefix when testing against live server
-    
-    httplib::Client cli("localhost", 8080);
-    auto res = cli.Get("/console?limit=50");
-    
-    ASSERT_NE(res, nullptr);
-    ASSERT_EQ(res->status, 200);
-    
-    auto body = json::parse(res->body);
-    EXPECT_TRUE(body.contains("count"));
-    EXPECT_TRUE(body.contains("total"));
-    EXPECT_TRUE(body.contains("messages"));
-    EXPECT_TRUE(body["messages"].is_array());
 }
 

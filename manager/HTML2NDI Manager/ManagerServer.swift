@@ -148,7 +148,7 @@ class ManagerServer {
     
     private func getStreamsJSON() -> String {
         let streams = StreamManager.shared.streams.map { stream -> [String: Any] in
-            return [
+            var dict: [String: Any] = [
                 "id": stream.id.uuidString,
                 "name": stream.config.name,
                 "url": stream.config.url,
@@ -174,8 +174,18 @@ class ManagerServer {
                 "bandwidthMbps": stream.bandwidthMbps,
                 // Health
                 "isHealthy": stream.isHealthy,
-                "crashCount": stream.crashCount
+                "crashCount": stream.crashCount,
+                // Error state
+                "lastError": stream.lastError,
+                "hasError": !stream.lastError.isEmpty
             ]
+            
+            // Add error timestamp if available
+            if let errorTime = stream.errorTime {
+                dict["errorTime"] = ISO8601DateFormatter().string(from: errorTime)
+            }
+            
+            return dict
         }
         
         if let data = try? JSONSerialization.data(withJSONObject: streams),
@@ -193,7 +203,7 @@ class ManagerServer {
         
         var config = StreamConfig(
             name: json["name"] as? String,
-            url: json["url"] as? String ?? "about:blank",
+            url: json["url"] as? String ?? "",  // Empty URL = test card
             ndiName: json["ndiName"] as? String,
             ndiGroups: json["ndiGroups"] as? String ?? "public"
         )
@@ -415,6 +425,8 @@ class ManagerServer {
                 .dot{width:10px;height:10px;border-radius:50%}
                 .dot.on{background:var(--ok);box-shadow:0 0 10px var(--ok)}
                 .dot.off{background:var(--dim)}
+                .dot.err{background:var(--err);box-shadow:0 0 10px var(--err)}
+                .error-box{background:rgba(239,68,68,.1);border:1px solid var(--err);border-radius:8px;padding:.75rem;margin-bottom:1rem;font-size:.8rem;color:var(--err)}
                 .ndi-name{font-size:1.25rem;font-weight:600}
                 .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:.5rem;margin-bottom:1rem}
                 .stat{background:var(--input);padding:.5rem;border-radius:8px;text-align:center}
@@ -455,7 +467,7 @@ class ManagerServer {
                 <div class="modal-c">
                     <div class="modal-h">Add New Stream</div>
                     <div class="form-g"><label>Stream Name</label><input id="newName" placeholder="My Graphics"></div>
-                    <div class="form-g"><label>Source URL</label><input id="newUrl" placeholder="http://localhost:9090/graphics.html"></div>
+                    <div class="form-g"><label>Source URL (optional - blank shows test card)</label><input id="newUrl" placeholder="Leave blank for test card"></div>
                     <div class="form-g"><label>NDI Source Name</label><input id="newNdi" placeholder="Graphics"></div>
                     <div class="form-g"><label>NDI Access Group</label><input id="newGroups" value="public" placeholder="public" title="Comma-separated groups. Use 'public' for all receivers."></div>
                     <div class="form-row">
@@ -500,8 +512,8 @@ class ManagerServer {
                     
                     const stats = card.querySelectorAll('.stat-v');
                     if (stats[0]) {
-                        stats[0].textContent = s.isRunning ? (s.isHealthy ? 'Running' : 'Stalled') : 'Stopped';
-                        stats[0].style.color = s.isRunning ? (s.isHealthy ? 'var(--ok)' : 'var(--err)') : 'var(--dim)';
+                        stats[0].textContent = getStatusText(s);
+                        stats[0].style.color = getStatusColor(s);
                     }
                     if (stats[1]) stats[1].textContent = s.actualFps?.toFixed(1) || '-';
                     if (stats[2]) stats[2].textContent = s.connections || 0;
@@ -509,12 +521,30 @@ class ManagerServer {
                     // Update tally indicators
                     const statusDiv = card.querySelector('.status');
                     if (statusDiv) {
-                        let tallyHtml = `<div class="dot ${s.isRunning?'on':'off'}"></div>`;
+                        let tallyHtml = `<div class="dot ${getDotClass(s)}"></div>`;
                         if (s.onProgram) tallyHtml += '<span class="tally pgm">PGM</span>';
                         if (s.onPreview) tallyHtml += '<span class="tally pvw">PVW</span>';
                         statusDiv.innerHTML = tallyHtml;
                     }
                 });
+            }
+            
+            function getStatusText(s) {
+                if (s.isRunning) return s.isHealthy ? 'Running' : 'Stalled';
+                if (s.hasError) return 'Error';
+                return 'Stopped';
+            }
+            
+            function getStatusColor(s) {
+                if (s.isRunning) return s.isHealthy ? 'var(--ok)' : 'var(--err)';
+                if (s.hasError) return 'var(--err)';
+                return 'var(--dim)';
+            }
+            
+            function getDotClass(s) {
+                if (s.isRunning) return 'on';
+                if (s.hasError) return 'err';
+                return 'off';
             }
             
             function render() {
@@ -527,12 +557,13 @@ class ManagerServer {
                     <div class="card">
                         <div class="card-h">
                             <div class="status">
-                                <div class="dot ${s.isRunning?'on':'off'}"></div>
+                                <div class="dot ${getDotClass(s)}"></div>
                                 ${s.onProgram ? '<span class="tally pgm">PGM</span>' : ''}
                                 ${s.onPreview ? '<span class="tally pvw">PVW</span>' : ''}
                             </div>
                             <span style="color:var(--dim);font-size:.85rem">${s.width}x${s.height} @ ${s.fps}fps</span>
                         </div>
+                        ${s.hasError && !s.isRunning ? `<div class="error-box">${escapeHtml(s.lastError)}${s.crashCount > 0 ? ' (crashes: '+s.crashCount+')' : ''}</div>` : ''}
                         ${s.isRunning && s.httpPort > 0 ? `
                         <div style="margin-bottom:1rem;border-radius:8px;overflow:hidden;background:var(--input)">
                             <img class="thumb" data-port="${s.httpPort}" 
@@ -551,13 +582,14 @@ class ManagerServer {
                             <input id="ndiGroups-${s.id}" data-stream-id="${s.id}" data-field="ndiGroups" value="${s.ndiGroups||'public'}" onchange="updateField('${s.id}','ndiGroups',this.value)" placeholder="public" style="width:100%" title="Comma-separated groups. Use 'public' for all.">
                         </div>
                         <div class="stats" style="margin-bottom:1rem">
-                            <div class="stat"><div class="stat-l">Status</div><div class="stat-v" style="color:${s.isRunning?(s.isHealthy?'var(--ok)':'var(--err)'):'var(--dim)'}">${s.isRunning?(s.isHealthy?'Running':'Stalled'):'Stopped'}</div></div>
+                            <div class="stat"><div class="stat-l">Status</div><div class="stat-v" style="color:${getStatusColor(s)}">${getStatusText(s)}</div></div>
                             <div class="stat"><div class="stat-l">FPS</div><div class="stat-v">${s.actualFps?.toFixed(1)||'-'}</div></div>
                             <div class="stat"><div class="stat-l">Connections</div><div class="stat-v">${s.connections||0}</div></div>
                         </div>
                         <div class="url-row">
-                            <input id="url-${s.id}" data-stream-id="${s.id}" data-field="url" value="${s.url}" onchange="updateField('${s.id}','url',this.value)" placeholder="URL">
-                            <button class="btn-s btn-sm" onclick="openControl('${s.httpPort}')">Control</button>
+                            <input id="url-${s.id}" data-stream-id="${s.id}" data-field="url" value="${s.url}" onchange="updateField('${s.id}','url',this.value)" placeholder="Leave blank for test card" style="${!s.url?'font-style:italic;color:var(--dim)':''}">
+                            ${s.isRunning && !s.url ? '<span style="font-size:.7rem;color:var(--accent);margin-left:-4rem;margin-right:.5rem">Test Card</span>' : ''}
+                            <button class="btn-s btn-sm" onclick="openControl('${s.httpPort}')" ${!s.isRunning?'disabled':''}>Control</button>
                         </div>
                         <div class="card-actions">
                             <button class="btn-s btn-sm" onclick="del('${s.id}')">Delete</button>
@@ -612,7 +644,7 @@ class ManagerServer {
             async function addStream() {
                 const data = {
                     name: document.getElementById('newName').value,
-                    url: document.getElementById('newUrl').value || 'about:blank',
+                    url: document.getElementById('newUrl').value || '',  // Empty = test card
                     ndiName: document.getElementById('newNdi').value,
                     ndiGroups: document.getElementById('newGroups').value || 'public',
                     width: parseInt(document.getElementById('newW').value) || 1920,
@@ -638,6 +670,8 @@ class ManagerServer {
             }
             
             function toast(msg) { const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),3000); }
+            
+            function escapeHtml(text) { const d=document.createElement('div'); d.textContent=text; return d.innerHTML; }
             
             function refreshThumbnails() {
                 document.querySelectorAll('img.thumb').forEach(img => {

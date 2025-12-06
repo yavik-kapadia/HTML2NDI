@@ -40,6 +40,8 @@ class StreamInstance: ObservableObject, Identifiable {
     @Published var connections: Int = 0
     @Published var crashCount: Int = 0
     @Published var isHealthy: Bool = true
+    @Published var lastError: String = ""
+    @Published var errorTime: Date? = nil
     
     // Extended stats
     @Published var onProgram: Bool = false
@@ -73,6 +75,18 @@ class StreamInstance: ObservableObject, Identifiable {
     func start(workerPath: String) {
         guard !isRunning else { return }
         
+        // Clear previous error
+        lastError = ""
+        errorTime = nil
+        
+        // Check if worker exists
+        if !FileManager.default.fileExists(atPath: workerPath) {
+            lastError = "Worker not found at: \(workerPath)"
+            errorTime = Date()
+            logError(lastError)
+            return
+        }
+        
         workerPathCache = workerPath
         intentionalStop = false
         
@@ -88,8 +102,13 @@ class StreamInstance: ObservableObject, Identifiable {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: workerPath)
         
+        // Use test card URL if no URL specified or blank
+        let effectiveUrl = (config.url.isEmpty || config.url == "about:blank") 
+            ? "http://localhost:\(httpPort)/testcard" 
+            : config.url
+        
         var args = [
-            "--url", config.url,
+            "--url", effectiveUrl,
             "--ndi-name", config.ndiName,
             "--width", String(config.width),
             "--height", String(config.height),
@@ -105,12 +124,32 @@ class StreamInstance: ObservableObject, Identifiable {
         
         process.arguments = args
         
-        // Capture output
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = pipe
+        // Capture output for error detection
+        let outputPipe = Pipe()
+        let errorPipe = Pipe()
+        process.standardOutput = outputPipe
+        process.standardError = errorPipe
+        
+        // Read stderr for error messages
+        errorPipe.fileHandleForReading.readabilityHandler = { [weak self] handle in
+            let data = handle.availableData
+            if !data.isEmpty, let output = String(data: data, encoding: .utf8) {
+                DispatchQueue.main.async {
+                    // Capture last significant error
+                    let lines = output.components(separatedBy: .newlines)
+                    for line in lines where line.contains("ERROR") || line.contains("error") || line.contains("failed") {
+                        self?.lastError = line.trimmingCharacters(in: .whitespaces)
+                        self?.errorTime = Date()
+                    }
+                }
+            }
+        }
         
         process.terminationHandler = { [weak self] proc in
+            // Stop reading
+            errorPipe.fileHandleForReading.readabilityHandler = nil
+            outputPipe.fileHandleForReading.readabilityHandler = nil
+            
             DispatchQueue.main.async {
                 self?.handleProcessTermination(exitCode: proc.terminationStatus)
             }
@@ -132,6 +171,8 @@ class StreamInstance: ObservableObject, Identifiable {
             
             logInfo("Started stream '\(config.name)' on port \(httpPort)")
         } catch {
+            lastError = "Failed to start: \(error.localizedDescription)"
+            errorTime = Date()
             logError("Failed to start stream: \(error)")
         }
     }
@@ -145,11 +186,35 @@ class StreamInstance: ObservableObject, Identifiable {
         if intentionalStop {
             logInfo("Stream '\(config.name)' stopped intentionally")
             restartAttempts = 0
+            lastError = ""
+            errorTime = nil
             return
         }
         
         // Process crashed - log and attempt restart
         crashCount += 1
+        
+        // Set error message based on exit code
+        if lastError.isEmpty {
+            switch exitCode {
+            case -1:
+                lastError = "Process died unexpectedly"
+            case 1:
+                lastError = "Initialization failed (check NDI/CEF)"
+            case 2:
+                lastError = "Invalid configuration"
+            case 9, 15:
+                lastError = "Process was killed"
+            case 127:
+                lastError = "Worker executable not found"
+            case 139:
+                lastError = "Segmentation fault (crash)"
+            default:
+                lastError = "Exited with code \(exitCode)"
+            }
+            errorTime = Date()
+        }
+        
         logWarning("Stream '\(config.name)' terminated unexpectedly (exit: \(exitCode), crashes: \(crashCount))")
         
         // Check if we should auto-restart
@@ -375,8 +440,8 @@ class StreamManager: ObservableObject {
         guard let data = try? Data(contentsOf: configPath),
               let configs = try? JSONDecoder().decode([StreamConfig].self, from: data) else {
             logInfo("No saved streams found, creating default")
-            // Create default stream if none exist
-            addStream(StreamConfig(name: "Default", url: "about:blank", ndiName: "HTML2NDI"))
+            // Create default stream with test card (empty URL)
+            addStream(StreamConfig(name: "Default Stream", url: "", ndiName: "HTML2NDI"))
             return
         }
         
