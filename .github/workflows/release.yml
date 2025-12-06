@@ -178,6 +178,9 @@ jobs:
         
         echo "Signing with: $IDENTITY"
         
+        # Sign NDI library
+        codesign --force --options runtime --timestamp --sign "$IDENTITY" "$WORKER/Contents/Frameworks/libndi.dylib"
+        
         # Sign CEF libraries
         codesign --force --options runtime --timestamp --sign "$IDENTITY" "$CEF/Libraries/libEGL.dylib"
         codesign --force --options runtime --timestamp --sign "$IDENTITY" "$CEF/Libraries/libGLESv2.dylib"

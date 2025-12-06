@@ -64,6 +64,9 @@ if [ -n "$IDENTITY" ]; then
     WORKER="$RESOURCES/html2ndi.app"
     CEF="$WORKER/Contents/Frameworks/Chromium Embedded Framework.framework"
     
+    # Sign NDI library
+    codesign --force --options runtime --timestamp --sign "$IDENTITY" "$WORKER/Contents/Frameworks/libndi.dylib" 2>/dev/null
+    
     # Sign CEF libraries
     codesign --force --options runtime --timestamp --sign "$IDENTITY" "$CEF/Libraries/libEGL.dylib" 2>/dev/null
     codesign --force --options runtime --timestamp --sign "$IDENTITY" "$CEF/Libraries/libGLESv2.dylib" 2>/dev/null
