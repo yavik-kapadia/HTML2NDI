@@ -63,28 +63,29 @@ if [ -n "$IDENTITY" ]; then
     
     WORKER="$RESOURCES/html2ndi.app"
     CEF="$WORKER/Contents/Frameworks/Chromium Embedded Framework.framework"
+    ENTITLEMENTS="$PROJECT_DIR/resources/entitlements.plist"
     
     # Sign NDI library
-    codesign --force --options runtime --timestamp --sign "$IDENTITY" "$WORKER/Contents/Frameworks/libndi.dylib" 2>/dev/null
+    codesign --force --options runtime --timestamp --sign "$IDENTITY" --entitlements "$ENTITLEMENTS" "$WORKER/Contents/Frameworks/libndi.dylib" 2>/dev/null
     
     # Sign CEF libraries
-    codesign --force --options runtime --timestamp --sign "$IDENTITY" "$CEF/Libraries/libEGL.dylib" 2>/dev/null
-    codesign --force --options runtime --timestamp --sign "$IDENTITY" "$CEF/Libraries/libGLESv2.dylib" 2>/dev/null
-    codesign --force --options runtime --timestamp --sign "$IDENTITY" "$CEF/Libraries/libvk_swiftshader.dylib" 2>/dev/null
+    codesign --force --options runtime --timestamp --sign "$IDENTITY" --entitlements "$ENTITLEMENTS" "$CEF/Libraries/libEGL.dylib" 2>/dev/null
+    codesign --force --options runtime --timestamp --sign "$IDENTITY" --entitlements "$ENTITLEMENTS" "$CEF/Libraries/libGLESv2.dylib" 2>/dev/null
+    codesign --force --options runtime --timestamp --sign "$IDENTITY" --entitlements "$ENTITLEMENTS" "$CEF/Libraries/libvk_swiftshader.dylib" 2>/dev/null
     
     # Sign CEF framework
-    codesign --force --options runtime --timestamp --sign "$IDENTITY" "$CEF"
+    codesign --force --options runtime --timestamp --sign "$IDENTITY" --entitlements "$ENTITLEMENTS" "$CEF"
     
     # Sign helper apps
     for helper in "$WORKER/Contents/Frameworks/"*.app; do
-        codesign --force --options runtime --timestamp --sign "$IDENTITY" "$helper"
+        codesign --force --options runtime --timestamp --sign "$IDENTITY" --entitlements "$ENTITLEMENTS" "$helper"
     done
     
     # Sign worker app
-    codesign --force --options runtime --timestamp --sign "$IDENTITY" "$WORKER"
+    codesign --force --options runtime --timestamp --sign "$IDENTITY" --entitlements "$ENTITLEMENTS" "$WORKER"
     
     # Sign main app
-    codesign --force --options runtime --timestamp --sign "$IDENTITY" "$APP_BUNDLE"
+    codesign --force --options runtime --timestamp --sign "$IDENTITY" --entitlements "$ENTITLEMENTS" "$APP_BUNDLE"
     
     echo "App signed with Developer ID"
 else

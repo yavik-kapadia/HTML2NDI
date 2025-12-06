@@ -175,30 +175,31 @@ jobs:
         APP_DIR="${{ env.APP_DIR }}"
         WORKER="$APP_DIR/Contents/Resources/html2ndi.app"
         CEF="$WORKER/Contents/Frameworks/Chromium Embedded Framework.framework"
+        ENTITLEMENTS="resources/entitlements.plist"
         
         echo "Signing with: $IDENTITY"
         
         # Sign NDI library
-        codesign --force --options runtime --timestamp --sign "$IDENTITY" "$WORKER/Contents/Frameworks/libndi.dylib"
+        codesign --force --options runtime --timestamp --sign "$IDENTITY" --entitlements "$ENTITLEMENTS" "$WORKER/Contents/Frameworks/libndi.dylib"
         
         # Sign CEF libraries
-        codesign --force --options runtime --timestamp --sign "$IDENTITY" "$CEF/Libraries/libEGL.dylib"
-        codesign --force --options runtime --timestamp --sign "$IDENTITY" "$CEF/Libraries/libGLESv2.dylib"
-        codesign --force --options runtime --timestamp --sign "$IDENTITY" "$CEF/Libraries/libvk_swiftshader.dylib"
+        codesign --force --options runtime --timestamp --sign "$IDENTITY" --entitlements "$ENTITLEMENTS" "$CEF/Libraries/libEGL.dylib"
+        codesign --force --options runtime --timestamp --sign "$IDENTITY" --entitlements "$ENTITLEMENTS" "$CEF/Libraries/libGLESv2.dylib"
+        codesign --force --options runtime --timestamp --sign "$IDENTITY" --entitlements "$ENTITLEMENTS" "$CEF/Libraries/libvk_swiftshader.dylib"
         
         # Sign CEF framework
-        codesign --force --options runtime --timestamp --sign "$IDENTITY" "$CEF"
+        codesign --force --options runtime --timestamp --sign "$IDENTITY" --entitlements "$ENTITLEMENTS" "$CEF"
         
         # Sign helper apps
         for helper in "$WORKER/Contents/Frameworks/"*.app; do
-          codesign --force --options runtime --timestamp --sign "$IDENTITY" "$helper"
+          codesign --force --options runtime --timestamp --sign "$IDENTITY" --entitlements "$ENTITLEMENTS" "$helper"
         done
         
         # Sign worker app
-        codesign --force --options runtime --timestamp --sign "$IDENTITY" "$WORKER"
+        codesign --force --options runtime --timestamp --sign "$IDENTITY" --entitlements "$ENTITLEMENTS" "$WORKER"
         
         # Sign main app
-        codesign --force --options runtime --timestamp --sign "$IDENTITY" "$APP_DIR"
+        codesign --force --options runtime --timestamp --sign "$IDENTITY" --entitlements "$ENTITLEMENTS" "$APP_DIR"
         
         # Verify
         codesign -vvv --deep "$APP_DIR"
