@@ -6,8 +6,14 @@ struct HTML2NDIManagerApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     
     var body: some Scene {
+        // No scenes - this is a menu bar only app
+        // The popover is managed by AppDelegate
         Settings {
-            SettingsView()
+            EmptyView()
+        }
+        .commands {
+            // Remove default menu items
+            CommandGroup(replacing: .newItem) {}
         }
     }
 }
