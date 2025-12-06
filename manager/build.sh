@@ -51,6 +51,14 @@ echo ""
 echo "Step 3: Bundling html2ndi worker..."
 cp -R "$PROJECT_DIR/build/bin/html2ndi.app" "$RESOURCES/"
 
+# Ad-hoc code sign to prevent Gatekeeper issues
+echo ""
+echo "Step 4: Code signing..."
+codesign --deep --force --sign - "$APP_BUNDLE" 2>/dev/null && echo "App signed (ad-hoc)" || echo "Signing skipped"
+
+# Remove quarantine attribute
+xattr -cr "$APP_BUNDLE" 2>/dev/null
+
 echo ""
 echo "=== Build Complete ==="
 echo ""
