@@ -109,6 +109,32 @@ jobs:
     # Note: Swift tests require Xcode project for menu bar apps
     # SPM doesn't support XCTest with SwiftUI/AppKit apps properly
         
+    - name: Install Apple Certificate
+      env:
+        APPLE_CERTIFICATE_BASE64: ${{ secrets.APPLE_CERTIFICATE_BASE64 }}
+        APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+      run: |
+        # Create temporary keychain
+        KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
+        KEYCHAIN_PASSWORD=$(openssl rand -base64 32)
+        
+        security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+        security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+        security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+        
+        # Import certificate
+        echo "$APPLE_CERTIFICATE_BASE64" | base64 --decode > $RUNNER_TEMP/certificate.p12
+        security import $RUNNER_TEMP/certificate.p12 -P "$APPLE_CERTIFICATE_PASSWORD" \
+          -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+        
+        # Add keychain to search list
+        security list-keychain -d user -s "$KEYCHAIN_PATH"
+        
+        # Allow codesign to access the key
+        security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+        
+        echo "KEYCHAIN_PATH=$KEYCHAIN_PATH" >> $GITHUB_ENV
+
     - name: Package Application
       run: |
         VERSION="${{ steps.version.outputs.VERSION }}"
@@ -138,7 +164,72 @@ jobs:
         # Copy html2ndi worker app
         cp -R "build/bin/html2ndi.app" "$APP_DIR/Contents/Resources/"
         
-        # Create DMG
+        echo "APP_DIR=$APP_DIR" >> $GITHUB_ENV
+        echo "VERSION=$VERSION" >> $GITHUB_ENV
+
+    - name: Code Sign Application
+      env:
+        APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      run: |
+        IDENTITY="Developer ID Application: Yavik Kapadia ($APPLE_TEAM_ID)"
+        APP_DIR="${{ env.APP_DIR }}"
+        WORKER="$APP_DIR/Contents/Resources/html2ndi.app"
+        CEF="$WORKER/Contents/Frameworks/Chromium Embedded Framework.framework"
+        
+        echo "Signing with: $IDENTITY"
+        
+        # Sign CEF libraries
+        codesign --force --options runtime --timestamp --sign "$IDENTITY" "$CEF/Libraries/libEGL.dylib"
+        codesign --force --options runtime --timestamp --sign "$IDENTITY" "$CEF/Libraries/libGLESv2.dylib"
+        codesign --force --options runtime --timestamp --sign "$IDENTITY" "$CEF/Libraries/libvk_swiftshader.dylib"
+        
+        # Sign CEF framework
+        codesign --force --options runtime --timestamp --sign "$IDENTITY" "$CEF"
+        
+        # Sign helper apps
+        for helper in "$WORKER/Contents/Frameworks/"*.app; do
+          codesign --force --options runtime --timestamp --sign "$IDENTITY" "$helper"
+        done
+        
+        # Sign worker app
+        codesign --force --options runtime --timestamp --sign "$IDENTITY" "$WORKER"
+        
+        # Sign main app
+        codesign --force --options runtime --timestamp --sign "$IDENTITY" "$APP_DIR"
+        
+        # Verify
+        codesign -vvv --deep "$APP_DIR"
+
+    - name: Notarize Application
+      env:
+        APPLE_ID: ${{ secrets.APPLE_ID }}
+        APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+      run: |
+        APP_DIR="${{ env.APP_DIR }}"
+        VERSION="${{ env.VERSION }}"
+        
+        # Create ZIP for notarization
+        ditto -c -k --keepParent "$APP_DIR" "notarize.zip"
+        
+        # Submit for notarization
+        xcrun notarytool submit "notarize.zip" \
+          --apple-id "$APPLE_ID" \
+          --team-id "$APPLE_TEAM_ID" \
+          --password "$APPLE_APP_PASSWORD" \
+          --wait
+        
+        # Staple the ticket
+        xcrun stapler staple "$APP_DIR"
+        
+        rm -f notarize.zip
+
+    - name: Create DMG and ZIP
+      run: |
+        APP_DIR="${{ env.APP_DIR }}"
+        VERSION="${{ env.VERSION }}"
+        APP_NAME="HTML2NDI Manager"
+        
         DMG_NAME="HTML2NDI-Manager-${VERSION}-arm64.dmg"
         
         # Create a temporary directory for DMG contents
@@ -185,14 +276,9 @@ jobs:
           
           1. Download the `.dmg` file
           2. Open the DMG and drag **HTML2NDI Manager** to Applications
-          3. **Important**: Before first launch, open Terminal and run:
-             ```
-             xattr -cr "/Applications/HTML2NDI Manager.app"
-             ```
-          4. Launch from Applications
+          3. Launch from Applications
           
-          > **Note**: This removes the macOS quarantine flag. The app is unsigned but safe.
-          > Alternatively, right-click the app and select "Open" to bypass Gatekeeper.
+          The app is **code signed and notarized by Apple** - no security warnings!
           
           ---
           
