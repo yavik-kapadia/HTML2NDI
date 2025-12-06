@@ -51,10 +51,43 @@ echo ""
 echo "Step 3: Bundling html2ndi worker..."
 cp -R "$PROJECT_DIR/build/bin/html2ndi.app" "$RESOURCES/"
 
-# Ad-hoc code sign to prevent Gatekeeper issues
+# Code signing
 echo ""
 echo "Step 4: Code signing..."
-codesign --deep --force --sign - "$APP_BUNDLE" 2>/dev/null && echo "App signed (ad-hoc)" || echo "Signing skipped"
+
+# Check for Developer ID certificate
+IDENTITY=$(security find-identity -v -p codesigning | grep "Developer ID Application" | head -1 | sed 's/.*"\(.*\)".*/\1/')
+
+if [ -n "$IDENTITY" ]; then
+    echo "Signing with: $IDENTITY"
+    
+    WORKER="$RESOURCES/html2ndi.app"
+    CEF="$WORKER/Contents/Frameworks/Chromium Embedded Framework.framework"
+    
+    # Sign CEF libraries
+    codesign --force --options runtime --timestamp --sign "$IDENTITY" "$CEF/Libraries/libEGL.dylib" 2>/dev/null
+    codesign --force --options runtime --timestamp --sign "$IDENTITY" "$CEF/Libraries/libGLESv2.dylib" 2>/dev/null
+    codesign --force --options runtime --timestamp --sign "$IDENTITY" "$CEF/Libraries/libvk_swiftshader.dylib" 2>/dev/null
+    
+    # Sign CEF framework
+    codesign --force --options runtime --timestamp --sign "$IDENTITY" "$CEF"
+    
+    # Sign helper apps
+    for helper in "$WORKER/Contents/Frameworks/"*.app; do
+        codesign --force --options runtime --timestamp --sign "$IDENTITY" "$helper"
+    done
+    
+    # Sign worker app
+    codesign --force --options runtime --timestamp --sign "$IDENTITY" "$WORKER"
+    
+    # Sign main app
+    codesign --force --options runtime --timestamp --sign "$IDENTITY" "$APP_BUNDLE"
+    
+    echo "App signed with Developer ID"
+else
+    echo "No Developer ID found, using ad-hoc signing..."
+    codesign --deep --force --sign - "$APP_BUNDLE" 2>/dev/null
+fi
 
 # Remove quarantine attribute
 xattr -cr "$APP_BUNDLE" 2>/dev/null
