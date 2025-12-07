@@ -417,10 +417,8 @@ void HttpServer::setup_routes() {
             };
         }
         
-        // Add frame pump genlocked status
-        if (app_->frame_pump()) {
-            status["genlocked"] = app_->frame_pump()->is_genlocked();
-        }
+        // Add genlocked status if available
+        status["genlocked"] = (genlock && genlock->mode() != GenlockMode::Disabled && genlock->is_synchronized());
         
         res.set_content(status.dump(2), "application/json");
     });

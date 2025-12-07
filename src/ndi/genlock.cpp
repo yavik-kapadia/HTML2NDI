@@ -70,7 +70,7 @@ bool GenlockClock::initialize() {
     // Set socket options
     int reuse = 1;
     if (setsockopt(socket_fd_, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse)) < 0) {
-        LOG_WARN("Failed to set SO_REUSEADDR: %s", strerror(errno));
+        LOG_DEBUG("Failed to set SO_REUSEADDR: %s", strerror(errno));
     }
     
     if (mode_ == GenlockMode::Master) {
@@ -192,8 +192,8 @@ std::chrono::steady_clock::time_point GenlockClock::next_frame_boundary(
 
 int64_t GenlockClock::get_ndi_timecode() const {
     if (mode_ == GenlockMode::Disabled || !initialized_) {
-        // Use synthesized timecode
-        return NDIlib_send_timecode_synthesize;
+        // Use synthesized timecode (NDI constant value is 0x7FFFFFFFFFFFFFFF)
+        return INT64_C(0x7FFFFFFFFFFFFFFF);
     }
     
     // Calculate timecode in 100ns units since reference
