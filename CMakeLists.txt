@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.21)
-project(HTML2NDI VERSION 1.3.0 LANGUAGES CXX)
+project(HTML2NDI VERSION 1.4.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -88,6 +88,7 @@ set(CEF_SOURCES
 set(NDI_SOURCES
     src/ndi/ndi_sender.cpp
     src/ndi/frame_pump.cpp
+    src/ndi/genlock.cpp
 )
 
 set(HTTP_SOURCES
@@ -171,8 +172,8 @@ set_target_properties(${MAIN_TARGET} PROPERTIES
     MACOSX_BUNDLE TRUE
     MACOSX_BUNDLE_INFO_PLIST "${CMAKE_SOURCE_DIR}/resources/Info.plist"
     MACOSX_BUNDLE_BUNDLE_NAME "HTML2NDI"
-    MACOSX_BUNDLE_BUNDLE_VERSION "1.3.0"
-    MACOSX_BUNDLE_SHORT_VERSION_STRING "1.3"
+    MACOSX_BUNDLE_BUNDLE_VERSION "1.4.0"
+    MACOSX_BUNDLE_SHORT_VERSION_STRING "1.4"
     MACOSX_BUNDLE_GUI_IDENTIFIER "com.html2ndi.app"
     INSTALL_RPATH "@executable_path/../Frameworks"
     BUILD_WITH_INSTALL_RPATH TRUE
@@ -304,6 +305,7 @@ if(BUILD_TESTS)
         tests/cpp/test_logger.cpp
         tests/cpp/test_http_api.cpp
         tests/cpp/test_watchdog.cpp
+        tests/cpp/test_genlock.cpp
     )
     
     # Sources that can be tested without CEF/NDI runtime
@@ -311,6 +313,7 @@ if(BUILD_TESTS)
         src/app/config.cpp
         src/utils/logger.cpp
         src/utils/watchdog.cpp
+        src/ndi/genlock.cpp
     )
     
     # Create test executable

@@ -14,6 +14,7 @@ class NdiSender;
 class FramePump;
 class HttpServer;
 class Logger;
+class GenlockClock;
 
 /**
  * Main application class.
@@ -98,6 +99,16 @@ public:
      * @return true if thumbnail was generated
      */
     bool get_thumbnail(std::vector<uint8_t>& out_jpeg, int width = 320, int quality = 75);
+    
+    /**
+     * Get genlock clock (may be null).
+     */
+    std::shared_ptr<GenlockClock> genlock_clock() { return genlock_clock_; }
+    
+    /**
+     * Get frame pump.
+     */
+    FramePump* frame_pump() { return frame_pump_.get(); }
 
 private:
     Config config_;
@@ -107,6 +118,7 @@ private:
     std::unique_ptr<NdiSender> ndi_sender_;
     std::unique_ptr<FramePump> frame_pump_;
     std::unique_ptr<HttpServer> http_server_;
+    std::shared_ptr<GenlockClock> genlock_clock_;
     
     // Actual measured FPS
     std::atomic<float> actual_fps_{0.0f};

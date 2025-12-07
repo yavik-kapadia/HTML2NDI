@@ -95,7 +95,10 @@ void NdiSender::send_video_frame(
     video_frame_.frame_rate_D = frame_rate_d;
     video_frame_.picture_aspect_ratio = static_cast<float>(width) / static_cast<float>(height);
     video_frame_.frame_format_type = NDIlib_frame_format_type_progressive;
-    video_frame_.timecode = NDIlib_send_timecode_synthesize;
+
+
+
+    video_frame_.timecode = next_timecode_.load();  // Use configured timecode
     video_frame_.p_data = const_cast<uint8_t*>(data);
     video_frame_.line_stride_in_bytes = width * 4;
     video_frame_.timestamp = 0;

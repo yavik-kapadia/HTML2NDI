@@ -1,6 +1,7 @@
 #pragma once
 
 #include "html2ndi/ndi/ndi_sender.h"
+#include "html2ndi/ndi/genlock.h"
 
 #include <atomic>
 #include <chrono>
@@ -24,8 +25,9 @@ public:
      * Create a frame pump.
      * @param sender NDI sender to deliver frames to
      * @param target_fps Target framerate
+     * @param genlock_clock Optional genlock clock for synchronization
      */
-    FramePump(NdiSender* sender, int target_fps);
+    FramePump(NdiSender* sender, int target_fps, std::shared_ptr<GenlockClock> genlock_clock = nullptr);
     ~FramePump();
     
     // Non-copyable, non-movable
@@ -96,12 +98,26 @@ public:
      * @return true if a frame was available
      */
     bool get_current_frame(std::vector<uint8_t>& out_data, int& out_width, int& out_height) const;
+    
+    /**
+     * Set genlock clock for synchronization.
+     * @param genlock_clock Genlock clock instance (nullptr to disable)
+     */
+    void set_genlock_clock(std::shared_ptr<GenlockClock> genlock_clock);
+    
+    /**
+     * Get genlock synchronization status.
+     * @return true if genlocked and synchronized
+     */
+    bool is_genlocked() const;
 
 private:
     void pump_thread();
     void update_fps_counter();
+    std::chrono::steady_clock::time_point get_current_time() const;
     
     NdiSender* sender_;
+    std::shared_ptr<GenlockClock> genlock_clock_;
     
     std::atomic<int> target_fps_;
     std::chrono::nanoseconds frame_duration_;

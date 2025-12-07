@@ -11,9 +11,10 @@
 
 namespace html2ndi {
 
-FramePump::FramePump(NdiSender* sender, int target_fps)
+FramePump::FramePump(NdiSender* sender, int target_fps, std::shared_ptr<GenlockClock> genlock_clock)
     : sender_(sender)
-    , target_fps_(target_fps) {
+    , target_fps_(target_fps)
+    , genlock_clock_(genlock_clock) {
     
     // Calculate frame duration
     frame_duration_ = std::chrono::nanoseconds(1'000'000'000 / target_fps);
@@ -28,10 +29,12 @@ void FramePump::start() {
         return;
     }
     
-    LOG_DEBUG("Starting frame pump at %d fps", target_fps_.load());
+    LOG_DEBUG("Starting frame pump at %d fps%s", 
+              target_fps_.load(),
+              genlock_clock_ ? " (GENLOCKED)" : "");
     
     running_ = true;
-    start_time_ = std::chrono::steady_clock::now();
+    start_time_ = get_current_time();
     fps_start_ = start_time_;
     fps_frame_count_ = 0;
     frames_sent_ = 0;
@@ -107,12 +110,13 @@ float FramePump::actual_fps() const {
 void FramePump::pump_thread() {
     LOG_DEBUG("Frame pump thread started");
     
-    auto next_frame_time = std::chrono::steady_clock::now();
+    auto next_frame_time = get_current_time();
     int fps = target_fps_.load();
+    auto frame_duration = std::chrono::nanoseconds(1'000'000'000 / fps);
     
     while (running_) {
         // Wait for next frame time
-        auto now = std::chrono::steady_clock::now();
+        auto now = get_current_time();
         if (now < next_frame_time) {
             std::unique_lock<std::mutex> lock(buffer_mutex_);
             buffer_cv_.wait_until(lock, next_frame_time, [this] {
@@ -122,12 +126,19 @@ void FramePump::pump_thread() {
             if (!running_) break;
         }
         
-        // Get current frame rate
+        // Get current frame rate and duration
         fps = target_fps_.load();
+        frame_duration = std::chrono::nanoseconds(1'000'000'000 / fps);
         
         // Calculate next frame time
-        next_frame_time = std::chrono::steady_clock::now() + 
-                          std::chrono::nanoseconds(1'000'000'000 / fps);
+        if (genlock_clock_ && genlock_clock_->mode() != GenlockMode::Disabled) {
+            // Use genlock for frame-accurate synchronization
+            next_frame_time = genlock_clock_->next_frame_boundary(
+                get_current_time(), frame_duration);
+        } else {
+            // Standard timing
+            next_frame_time = get_current_time() + frame_duration;
+        }
         
         // Get read buffer
         int read_idx = read_buffer_.load();
@@ -143,8 +154,16 @@ void FramePump::pump_thread() {
                 continue;
             }
             
-            // Send frame to NDI
+            // Send frame to NDI with proper timecode
             if (sender_) {
+                // Temporarily store timecode in video frame
+                auto saved_timecode = sender_->get_timecode_mode();
+                
+                // Use genlock timecode if available
+                if (genlock_clock_ && genlock_clock_->mode() != GenlockMode::Disabled) {
+                    sender_->set_timecode(genlock_clock_->get_ndi_timecode());
+                }
+                
                 sender_->send_video_frame(
                     buffer.data.data(),
                     buffer.width,
@@ -152,6 +171,9 @@ void FramePump::pump_thread() {
                     fps,
                     1
                 );
+                
+                // Restore timecode mode
+                sender_->set_timecode_mode(saved_timecode);
             }
             
             buffer.ready = false;
@@ -168,7 +190,7 @@ void FramePump::pump_thread() {
 }
 
 void FramePump::update_fps_counter() {
-    auto now = std::chrono::steady_clock::now();
+    auto now = get_current_time();
     auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
         now - fps_start_).count();
     
@@ -182,6 +204,28 @@ void FramePump::update_fps_counter() {
         fps_start_ = now;
         fps_frame_count_ = 0;
     }
+}
+
+void FramePump::set_genlock_clock(std::shared_ptr<GenlockClock> genlock_clock) {
+    genlock_clock_ = genlock_clock;
+    if (genlock_clock_) {
+        LOG_INFO("Frame pump genlock enabled");
+    } else {
+        LOG_INFO("Frame pump genlock disabled");
+    }
+}
+
+bool FramePump::is_genlocked() const {
+    return genlock_clock_ && 
+           genlock_clock_->mode() != GenlockMode::Disabled &&
+           genlock_clock_->is_synchronized();
+}
+
+std::chrono::steady_clock::time_point FramePump::get_current_time() const {
+    if (genlock_clock_ && genlock_clock_->mode() != GenlockMode::Disabled) {
+        return genlock_clock_->now();
+    }
+    return std::chrono::steady_clock::now();
 }
 
 bool FramePump::get_current_frame(std::vector<uint8_t>& out_data, int& out_width, int& out_height) const {
@@ -205,7 +249,7 @@ double FramePump::uptime_seconds() const {
     if (!running_) {
         return 0.0;
     }
-    auto now = std::chrono::steady_clock::now();
+    auto now = get_current_time();
     auto elapsed = std::chrono::duration<double>(now - start_time_);
     return elapsed.count();
 }

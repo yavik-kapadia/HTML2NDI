@@ -150,6 +150,23 @@ public:
     std::string color_space_name() const;
     std::string gamma_mode_name() const;
     std::string color_range_name() const;
+    
+    /**
+     * Set explicit timecode for next frame.
+     * @param timecode NDI timecode in 100ns units (or NDIlib_send_timecode_synthesize)
+     */
+    void set_timecode(int64_t timecode) { next_timecode_ = timecode; }
+    
+    /**
+     * Get current timecode mode.
+     */
+    int64_t get_timecode_mode() const { return next_timecode_; }
+    
+    /**
+     * Set timecode mode (synthesized vs explicit).
+     * @param mode NDIlib_send_timecode_synthesize for auto, or explicit value
+     */
+    void set_timecode_mode(int64_t mode) { next_timecode_ = mode; }
 
 private:
     void update_metadata();
@@ -174,6 +191,9 @@ private:
     GammaMode gamma_mode_{GammaMode::BT709};
     ColorRange color_range_{ColorRange::Full};
     std::string color_metadata_;
+    
+    // Timecode control
+    std::atomic<int64_t> next_timecode_{NDIlib_send_timecode_synthesize};
 };
 
 } // namespace html2ndi

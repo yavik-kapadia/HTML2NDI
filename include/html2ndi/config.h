@@ -23,6 +23,10 @@ struct Config {
     bool ndi_clock_video = true;
     bool ndi_clock_audio = true;
     
+    // Genlock settings
+    std::string genlock_mode = "disabled";  // disabled, master, slave
+    std::string genlock_master_addr = "127.0.0.1:5960";  // Master address for slave mode
+    
     // HTTP server settings
     bool http_enabled = true;
     std::string http_host = "127.0.0.1";

@@ -1,0 +1,91 @@
+HTML2NDI Control Panel - Full Dashboard Layout
+===============================================
+
+┌────────────────────────────────────────────────────────────────────────────┐
+│                                                                            │
+│  N  HTML2NDI                                     ● Running                │
+│     Control Panel                                                         │
+│  ──────────────────────────────────────────────────────────────────────  │
+│                                                                            │
+│  ┌──────────────────┐  ┌──────────────────┐  ┌──────────────────┐       │
+│  │ i  Status        │  │ W  Source URL    │  │ C  Color Space   │       │
+│  ├──────────────────┤  ├──────────────────┤  ├──────────────────┤       │
+│  │ NDI Source       │  │ Current URL      │  │ Rec. 709  │ Rec. 2020 │  │
+│  │ HTML2NDI-Stream  │  │ [input field]    │  │ HD Broadcast      │       │
+│  │                  │  │                  │  │ sRGB      │ Rec. 601  │  │
+│  │ Connections      │  │ [Load] [Reload]  │  │ Web Standard      │       │
+│  │ 2                │  │                  │  │                   │       │
+│  │                  │  │                  │  │ ▸ Advanced        │       │
+│  │ Resolution       │  │                  │  │                   │       │
+│  │ 1920x1080        │  │                  │  │                   │       │
+│  │                  │  │                  │  │                   │       │
+│  │ FPS              │  │                  │  │                   │       │
+│  │ 60               │  │                  │  │                   │       │
+│  └──────────────────┘  └──────────────────┘  └──────────────────┘       │
+│                                                                            │
+│  ┌──────────────────┐  ┌──────────────────┐                              │
+│  │ G  Genlock       │  │ S  System        │                              │
+│  ├──────────────────┤  ├──────────────────┤                              │
+│  │ Mode             │  │ Actual FPS       │                              │
+│  │ Slave            │  │ 59.8             │                              │
+│  │                  │  │                  │                              │
+│  │ Status           │  │ Color Mode       │                              │
+│  │ Synced ✓         │  │ BT709            │                              │
+│  │                  │  │                  │                              │
+│  │ Offset           │  │ [Shutdown]       │                              │
+│  │ -125μs           │  │                  │                              │
+│  │                  │  │                  │                              │
+│  │ Jitter           │  │                  │                              │
+│  │ 85.3μs           │  │                  │                              │
+│  │                  │  │                  │                              │
+│  │ Note: Genlock mode is configured       │                              │
+│  │ via CLI arguments. Restart required.   │                              │
+│  └──────────────────┘  └──────────────────┘                              │
+│                                                                            │
+└────────────────────────────────────────────────────────────────────────────┘
+
+COLOR LEGEND
+============
+
+Genlock Card Colors:
+- Mode: Master (Purple), Slave (Green), Disabled (Gray)
+- Status: Synced (Green ✓), Not Synced (Red ✗)
+- Offset: <1ms (Green), 1-5ms (Yellow), >5ms (Red)
+- Jitter: <500μs (Green), 500μs-1ms (Yellow), >1ms (Red)
+
+Example States:
+
+MASTER STREAM:
+┌──────────────────┐
+│ Mode: Master     │ ← Purple
+│ Status: N/A      │
+│ Offset: N/A      │
+│ Jitter: N/A      │
+└──────────────────┘
+
+HEALTHY SLAVE:
+┌──────────────────┐
+│ Mode: Slave      │ ← Green
+│ Status: Synced   │ ← Green ✓
+│ Offset: -125μs   │ ← Green
+│ Jitter: 85.3μs   │ ← Green
+└──────────────────┘
+
+DISCONNECTED SLAVE:
+┌──────────────────┐
+│ Mode: Slave      │ ← Gray
+│ Status: Not Synced│ ← Red ✗
+│ Offset: N/A      │
+│ Jitter: N/A      │
+└──────────────────┘
+
+POOR SYNC:
+┌──────────────────┐
+│ Mode: Slave      │ ← Green
+│ Status: Synced   │ ← Green ✓
+│ Offset: +12850μs │ ← Red
+│ Jitter: 3420.5μs │ ← Red
+└──────────────────┘
+
+Access: http://localhost:8080/ (default port)
+Auto-refresh: Every 2 seconds

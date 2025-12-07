@@ -5,6 +5,7 @@
 #include "html2ndi/http/http_server.h"
 #include "html2ndi/application.h"
 #include "html2ndi/ndi/ndi_sender.h"
+#include "html2ndi/ndi/genlock.h"
 #include "html2ndi/utils/logger.h"
 
 #include <httplib.h>
@@ -108,6 +109,17 @@ static const char* CONTROL_PANEL_HTML = R"HTMLEND(
                 <button class="btn-p" onclick="applyC()" style="width:100%">Apply</button>
             </div>
         </div>
+        <div class="card"><div class="card-h"><div class="card-i">G</div><div class="card-t">Genlock</div></div>
+            <div class="stats" style="margin-bottom:1rem">
+                <div class="stat"><div class="stat-l">Mode</div><div class="stat-v" id="glmode" style="font-size:.95rem">-</div></div>
+                <div class="stat"><div class="stat-l">Status</div><div class="stat-v" id="glsync">-</div></div>
+                <div class="stat"><div class="stat-l">Offset</div><div class="stat-v" id="gloffset" style="font-size:.95rem">-</div></div>
+                <div class="stat"><div class="stat-l">Jitter</div><div class="stat-v" id="gljitter" style="font-size:.95rem">-</div></div>
+            </div>
+            <div style="font-size:.8rem;color:var(--dim);padding:.75rem;background:var(--input);border-radius:10px;border-left:3px solid var(--accent)">
+                <strong style="color:var(--text)">Note:</strong> Genlock mode is configured via CLI arguments. Restart required to change mode.
+            </div>
+        </div>
         <div class="card"><div class="card-h"><div class="card-i">S</div><div class="card-t">System</div></div>
             <div class="stats" style="margin-bottom:1rem">
                 <div class="stat"><div class="stat-l">Actual FPS</div><div class="stat-v" id="afps">-</div></div>
@@ -119,9 +131,10 @@ static const char* CONTROL_PANEL_HTML = R"HTMLEND(
 </div>
 <div class="toast" id="toast"></div>
 <script>
-async function stat(){try{const r=await fetch('/status'),d=await r.json();$('ndi').textContent=d.ndi_name;$('conn').textContent=d.ndi_connections;$('res').textContent=d.width+'x'+d.height;$('fps').textContent=d.fps;$('afps').textContent=(d.actual_fps||0).toFixed(1);if(document.activeElement!==$('url'))$('url').value=d.url||'';if(d.color){$('cs').value=d.color.colorspace;$('gm').value=d.color.gamma;$('rg').value=d.color.range;$('cm').textContent=d.color.colorspace;updP(d.color)}$('dot').style.background=d.running?'var(--ok)':'var(--err)';$('st').textContent=d.running?'Running':'Stopped'}catch(e){$('dot').style.background='var(--err)';$('st').textContent='Disconnected'}}
+async function stat(){try{const r=await fetch('/status'),d=await r.json();$('ndi').textContent=d.ndi_name;$('conn').textContent=d.ndi_connections;$('res').textContent=d.width+'x'+d.height;$('fps').textContent=d.fps;$('afps').textContent=(d.actual_fps||0).toFixed(1);if(document.activeElement!==$('url'))$('url').value=d.url||'';if(d.color){$('cs').value=d.color.colorspace;$('gm').value=d.color.gamma;$('rg').value=d.color.range;$('cm').textContent=d.color.colorspace;updP(d.color)}updGenlock(d.genlock,d.genlocked);$('dot').style.background=d.running?'var(--ok)':'var(--err)';$('st').textContent=d.running?'Running':'Stopped'}catch(e){$('dot').style.background='var(--err)';$('st').textContent='Disconnected'}}
 function $(id){return document.getElementById(id)}
 function updP(c){document.querySelectorAll('.preset').forEach(b=>b.classList.remove('on'));if(c.colorspace==='BT709'&&c.gamma==='BT709'&&c.range==='full')$('p-rec709').classList.add('on');else if(c.colorspace==='BT2020'&&c.gamma==='BT2020')$('p-rec2020').classList.add('on');else if(c.colorspace==='sRGB'&&c.gamma==='sRGB')$('p-srgb').classList.add('on');else if(c.colorspace==='BT601')$('p-rec601').classList.add('on')}
+function updGenlock(gl,locked){if(!gl){$('glmode').textContent='Disabled';$('glsync').textContent='N/A';$('gloffset').textContent='N/A';$('gljitter').textContent='N/A';return}const mode=gl.mode||'disabled';$('glmode').textContent=mode.charAt(0).toUpperCase()+mode.slice(1);$('glmode').style.color=mode==='master'?'var(--accent)':mode==='slave'?'var(--ok)':'var(--dim)';const synced=gl.synchronized||false;$('glsync').textContent=synced?'Synced':'Not Synced';$('glsync').style.color=synced?'var(--ok)':'var(--err)';if(mode==='slave'&&gl.offset_us!==undefined){const offset=gl.offset_us;const absOffset=Math.abs(offset);$('gloffset').textContent=(offset>=0?'+':'')+offset+'μs';$('gloffset').style.color=absOffset<1000?'var(--ok)':absOffset<5000?'#f59e0b':'var(--err)';if(gl.stats&&gl.stats.jitter_us!==undefined){const jitter=gl.stats.jitter_us;$('gljitter').textContent=jitter.toFixed(1)+'μs';$('gljitter').style.color=jitter<500?'var(--ok)':jitter<1000?'#f59e0b':'var(--err)'}else{$('gljitter').textContent='N/A'}}else{$('gloffset').textContent='N/A';$('gljitter').textContent='N/A'}}
 async function setUrl(){const u=$('url').value;if(!u)return toast('Enter a URL','err');try{const r=await fetch('/seturl',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url:u})});const d=await r.json();toast(d.success?'URL loaded!':d.error,d.success?'ok':'err')}catch(e){toast('Failed','err')}}
 async function reload(){try{await fetch('/reload',{method:'POST'});toast('Reloaded!','ok')}catch(e){toast('Failed','err')}}
 async function setP(p){try{const r=await fetch('/color',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({preset:p})});const d=await r.json();if(d.success){toast(p.toUpperCase(),'ok');stat()}}catch(e){toast('Failed','err')}}
@@ -373,6 +386,42 @@ void HttpServer::setup_routes() {
             }}
         };
         
+        // Add genlock information if available
+        auto genlock = app_->genlock_clock();
+        if (genlock) {
+            std::string mode_str = "disabled";
+            switch (genlock->mode()) {
+                case GenlockMode::Master: mode_str = "master"; break;
+                case GenlockMode::Slave: mode_str = "slave"; break;
+                case GenlockMode::Disabled: mode_str = "disabled"; break;
+            }
+            
+            auto stats = genlock->get_stats();
+            status["genlock"] = {
+                {"mode", mode_str},
+                {"synchronized", genlock->is_synchronized()},
+                {"offset_us", genlock->sync_offset_us()},
+                {"stats", {
+                    {"packets_sent", stats.sync_packets_sent},
+                    {"packets_received", stats.sync_packets_received},
+                    {"sync_failures", stats.sync_failures},
+                    {"avg_offset_us", stats.avg_offset_us},
+                    {"max_offset_us", stats.max_offset_us},
+                    {"jitter_us", stats.jitter_us}
+                }}
+            };
+        } else {
+            status["genlock"] = {
+                {"mode", "disabled"},
+                {"synchronized", false}
+            };
+        }
+        
+        // Add frame pump genlocked status
+        if (app_->frame_pump()) {
+            status["genlocked"] = app_->frame_pump()->is_genlocked();
+        }
+        
         res.set_content(status.dump(2), "application/json");
     });
     
@@ -543,6 +592,72 @@ void HttpServer::setup_routes() {
                 {"colorspace", ndi->color_space_name()},
                 {"gamma", ndi->gamma_mode_name()},
                 {"range", ndi->color_range_name()}
+            };
+            res.set_content(response.dump(), "application/json");
+            
+        } catch (const json::exception& e) {
+            res.status = 400;
+            json error = {{"error", e.what()}};
+            res.set_content(error.dump(), "application/json");
+        }
+    });
+    
+    // GET /genlock - Get genlock status
+    server_->Get("/genlock", [this, add_cors](const httplib::Request&, httplib::Response& res) {
+        add_cors(res);
+        
+        auto genlock = app_->genlock_clock();
+        if (!genlock) {
+            json response = {
+                {"mode", "disabled"},
+                {"synchronized", false},
+                {"available", false}
+            };
+            res.set_content(response.dump(2), "application/json");
+            return;
+        }
+        
+        std::string mode_str = "disabled";
+        switch (genlock->mode()) {
+            case GenlockMode::Master: mode_str = "master"; break;
+            case GenlockMode::Slave: mode_str = "slave"; break;
+            case GenlockMode::Disabled: mode_str = "disabled"; break;
+        }
+        
+        auto stats = genlock->get_stats();
+        json response = {
+            {"mode", mode_str},
+            {"synchronized", genlock->is_synchronized()},
+            {"offset_us", genlock->sync_offset_us()},
+            {"available", true},
+            {"stats", {
+                {"packets_sent", stats.sync_packets_sent},
+                {"packets_received", stats.sync_packets_received},
+                {"sync_failures", stats.sync_failures},
+                {"avg_offset_us", stats.avg_offset_us},
+                {"max_offset_us", stats.max_offset_us},
+                {"jitter_us", stats.jitter_us}
+            }}
+        };
+        
+        res.set_content(response.dump(2), "application/json");
+    });
+    
+    // POST /genlock - Configure genlock
+    server_->Post("/genlock", [this, add_cors](const httplib::Request& req, httplib::Response& res) {
+        add_cors(res);
+        
+        try {
+            auto body = json::parse(req.body);
+            
+            // Note: Genlock mode changes require restart in current implementation
+            // This endpoint documents the API for future dynamic reconfiguration
+            
+            res.status = 501; // Not Implemented
+            json response = {
+                {"error", "Genlock configuration requires restart. Use --genlock CLI flag."},
+                {"current_mode", app_->config().genlock_mode},
+                {"hint", "Restart with --genlock master|slave|disabled"}
             };
             res.set_content(response.dump(), "application/json");
             

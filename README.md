@@ -57,6 +57,7 @@ HTML2NDI consists of two components:
 
 - Multi-stream management via native macOS menu bar app
 - Web-based configuration dashboard
+- **Genlock support for frame-accurate multi-stream synchronization**
 - Live preview thumbnails for running streams
 - Configurable color space (Rec. 709, Rec. 2020, sRGB, Rec. 601)
 - Editable stream names and NDI source names
@@ -387,6 +388,26 @@ Stream configurations are stored in:
 ```
 ~/Library/Application Support/HTML2NDI/streams.json
 ```
+
+### Genlock (Frame Synchronization)
+
+HTML2NDI supports genlock for frame-accurate synchronization between multiple streams. This is essential for professional broadcast environments.
+
+**Quick Start:**
+```bash
+# Master stream
+./html2ndi --url https://graphics1.local \
+           --ndi-name "Camera 1" \
+           --genlock master
+
+# Slave stream
+./html2ndi --url https://graphics2.local \
+           --ndi-name "Camera 2" \
+           --genlock slave \
+           --genlock-master 127.0.0.1:5960
+```
+
+**For detailed information**, see [Genlock Documentation](docs/genlock.md)
 
 ### CEF Cache
 

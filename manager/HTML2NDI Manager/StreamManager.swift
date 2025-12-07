@@ -13,6 +13,8 @@ struct StreamConfig: Codable, Identifiable {
     var colorPreset: String
     var httpPort: Int
     var autoStart: Bool
+    var genlockMode: String  // disabled, master, slave
+    var genlockMasterAddr: String  // Master address for slave mode
     
     init(name: String? = nil, url: String = "about:blank", ndiName: String? = nil, ndiGroups: String = "public") {
         self.id = UUID()
@@ -28,6 +30,8 @@ struct StreamConfig: Codable, Identifiable {
         self.colorPreset = "rec709"
         self.httpPort = 0 // Auto-assign
         self.autoStart = false
+        self.genlockMode = "disabled"
+        self.genlockMasterAddr = "127.0.0.1:5960"
     }
 }
 
@@ -120,6 +124,14 @@ class StreamInstance: ObservableObject, Identifiable {
         // Add NDI groups if not "public" (public means all groups)
         if !config.ndiGroups.isEmpty && config.ndiGroups.lowercased() != "public" {
             args.append(contentsOf: ["--ndi-groups", config.ndiGroups])
+        }
+        
+        // Add genlock configuration if enabled
+        if config.genlockMode != "disabled" {
+            args.append(contentsOf: ["--genlock", config.genlockMode])
+            if config.genlockMode == "slave" && !config.genlockMasterAddr.isEmpty {
+                args.append(contentsOf: ["--genlock-master", config.genlockMasterAddr])
+            }
         }
         
         process.arguments = args
@@ -392,12 +404,30 @@ struct StreamStatus: Codable {
     let color: ColorStatus?
     let tally: TallyStatus?
     let stats: FrameStats?
+    let genlock: GenlockStatus?
+    let genlocked: Bool?
 }
 
 struct ColorStatus: Codable {
     let colorspace: String
     let gamma: String
     let range: String
+}
+
+struct GenlockStatus: Codable {
+    let mode: String
+    let synchronized: Bool
+    let offset_us: Int64?
+    let stats: GenlockStats?
+}
+
+struct GenlockStats: Codable {
+    let packets_sent: UInt64
+    let packets_received: UInt64
+    let sync_failures: UInt64
+    let avg_offset_us: Int64
+    let max_offset_us: Int64
+    let jitter_us: Double
 }
 
 struct TallyStatus: Codable {

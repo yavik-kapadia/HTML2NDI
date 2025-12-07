@@ -7,6 +7,7 @@
 #include "html2ndi/cef/offscreen_renderer.h"
 #include "html2ndi/ndi/ndi_sender.h"
 #include "html2ndi/ndi/frame_pump.h"
+#include "html2ndi/ndi/genlock.h"
 #include "html2ndi/http/http_server.h"
 #include "html2ndi/utils/logger.h"
 #include "html2ndi/utils/image_encode.h"
@@ -31,6 +32,25 @@ Application::~Application() {
 bool Application::initialize() {
     LOG_DEBUG("Initializing application...");
     
+    // Initialize genlock if enabled
+    if (config_.genlock_mode != "disabled") {
+        GenlockMode mode = GenlockMode::Disabled;
+        if (config_.genlock_mode == "master") {
+            mode = GenlockMode::Master;
+        } else if (config_.genlock_mode == "slave") {
+            mode = GenlockMode::Slave;
+        }
+        
+        LOG_INFO("Initializing genlock in %s mode", config_.genlock_mode.c_str());
+        genlock_clock_ = std::make_shared<GenlockClock>(
+            mode, config_.genlock_master_addr, config_.fps);
+        
+        if (!genlock_clock_->initialize()) {
+            LOG_ERROR("Failed to initialize genlock");
+            return false;
+        }
+    }
+    
     // Initialize NDI sender
     LOG_DEBUG("Creating NDI sender: %s", config_.ndi_name.c_str());
     ndi_sender_ = std::make_unique<NdiSender>(config_.ndi_name, config_.ndi_groups);
@@ -39,9 +59,9 @@ bool Application::initialize() {
         return false;
     }
     
-    // Create frame pump
+    // Create frame pump with genlock
     LOG_DEBUG("Creating frame pump at %d fps", config_.fps);
-    frame_pump_ = std::make_unique<FramePump>(ndi_sender_.get(), config_.fps);
+    frame_pump_ = std::make_unique<FramePump>(ndi_sender_.get(), config_.fps, genlock_clock_);
     
     // Create CEF renderer with frame callback
     LOG_DEBUG("Creating CEF renderer %dx%d", config_.width, config_.height);

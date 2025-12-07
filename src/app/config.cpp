@@ -13,7 +13,7 @@ namespace html2ndi {
 
 namespace {
 
-const char* VERSION = "1.0.0";
+const char* VERSION = "1.4.0";
 
 void print_arg(const char* short_opt, const char* long_opt, 
                const char* arg, const char* desc) {
@@ -51,6 +51,11 @@ void Config::print_help(const char* program_name) {
     print_arg("-g", "--ndi-groups", "<groups>", "NDI groups, comma-separated (default: all)");
     print_arg(nullptr, "--no-clock-video", nullptr, "Disable video clock timing");
     print_arg(nullptr, "--no-clock-audio", nullptr, "Disable audio clock timing");
+    
+    std::cout << std::endl;
+    std::cout << "Genlock Options:" << std::endl;
+    print_arg(nullptr, "--genlock", "<mode>", "Genlock mode: disabled, master, slave (default: disabled)");
+    print_arg(nullptr, "--genlock-master", "<addr>", "Master address for slave mode (default: 127.0.0.1:5960)");
     
     std::cout << std::endl;
     std::cout << "HTTP API Options:" << std::endl;
@@ -156,6 +161,18 @@ std::optional<Config> Config::parse(int argc, char* argv[]) {
             config.ndi_clock_audio = false;
         }
         
+        // Genlock options
+        else if (arg == "--genlock") {
+            config.genlock_mode = get_value();
+            if (config.genlock_mode.empty()) return std::nullopt;
+            std::transform(config.genlock_mode.begin(), config.genlock_mode.end(),
+                          config.genlock_mode.begin(), ::tolower);
+        }
+        else if (arg == "--genlock-master") {
+            config.genlock_master_addr = get_value();
+            if (config.genlock_master_addr.empty()) return std::nullopt;
+        }
+        
         // HTTP options
         else if (arg == "--http-host") {
             config.http_host = get_value();
@@ -247,6 +264,18 @@ bool Config::validate() const {
     // Basic URL validation
     if (url.empty()) {
         std::cerr << "Error: URL cannot be empty" << std::endl;
+        return false;
+    }
+    
+    // Validate genlock mode
+    if (genlock_mode != "disabled" && genlock_mode != "master" && genlock_mode != "slave") {
+        std::cerr << "Error: Genlock mode must be 'disabled', 'master', or 'slave'" << std::endl;
+        return false;
+    }
+    
+    // Validate genlock master address for slave mode
+    if (genlock_mode == "slave" && genlock_master_addr.empty()) {
+        std::cerr << "Error: Genlock master address required for slave mode" << std::endl;
         return false;
     }
     
