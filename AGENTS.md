@@ -215,6 +215,8 @@ Produces:
 
 
 ## AGENT INSTRUCTIONS
+
+### Code Quality
 - Always write tests.
 - All docs and md files should be stored in /docs except readme.md and AGENTS.md
 - You are an expert in C++ and Swift, take on the harder route and only choose the easiest path last.
@@ -223,4 +225,56 @@ Produces:
 - Always run the linter before before you merge.
 - Do not hard code colors
 - Avoid Emojis
-- Increment versioning
+
+### Version Management (CRITICAL)
+
+**BEFORE creating any version tag or release:**
+
+1. **Check existing tags:**
+   ```bash
+   git tag -l | sort -V
+   ```
+
+2. **Verify version files match:**
+   - `CMakeLists.txt` - `project(HTML2NDI VERSION X.Y.Z ...)`
+   - `CMakeLists.txt` - `MACOSX_BUNDLE_BUNDLE_VERSION "X.Y.Z"`
+   - `src/app/config.cpp` - `const char* VERSION = "X.Y.Z";`
+
+3. **Follow semantic versioning:**
+   - **Major (X.0.0)**: Breaking changes, incompatible API changes
+   - **Minor (x.Y.0)**: New features, backward compatible
+   - **Patch (x.y.Z)**: Bug fixes, backward compatible
+   - **Alpha/Beta**: Use `-alpha` or `-beta` suffix (e.g., `v1.5.0-alpha`)
+
+4. **Version progression rules:**
+   - Alpha versions must come BEFORE stable: `v1.5.0-alpha` → `v1.5.0`
+   - Never create `vX.Y.Z-alpha` if `vX.Y.Z` already exists
+   - If `vX.Y.Z` exists, next alpha is `vX.Y+1.0-alpha` or `vX+1.0.0-alpha`
+   - Example timeline: `v1.4.0` → `v1.4.1` → `v1.5.0-alpha` → `v1.5.0` → `v1.5.1`
+
+5. **Pre-commit version checklist:**
+   ```bash
+   # List all existing tags
+   git tag -l | sort -V
+   
+   # Verify intended version doesn't conflict
+   # If creating v1.5.0-alpha, ensure v1.5.0 doesn't exist yet
+   
+   # Grep all version references
+   grep -r "VERSION.*1\." CMakeLists.txt src/app/config.cpp
+   
+   # Ensure all three locations match the intended version
+   ```
+
+6. **Version update procedure:**
+   - Update `CMakeLists.txt` (2 locations)
+   - Update `src/app/config.cpp` (1 location)
+   - Commit version bump separately: `chore: Bump version to X.Y.Z`
+   - Create tag: `git tag -a vX.Y.Z -m "Release message"`
+   - Push commit, then push tag
+
+7. **If version conflict detected:**
+   - STOP immediately
+   - Ask user which version to use
+   - Common fix: increment to next available version
+   - Example: If v1.4.0 exists, use v1.5.0-alpha (not v1.4.0-alpha)
