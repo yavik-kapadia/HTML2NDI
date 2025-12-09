@@ -116,9 +116,9 @@ static const char* CONTROL_PANEL_HTML = R"HTMLEND(
                 <div class="stat"><div class="stat-l">Offset</div><div class="stat-v" id="gloffset" style="font-size:.95rem">-</div></div>
                 <div class="stat"><div class="stat-l">Jitter</div><div class="stat-v" id="gljitter" style="font-size:.95rem">-</div></div>
             </div>
-            <div style="font-size:.8rem;color:var(--dim);padding:.75rem;background:var(--input);border-radius:10px;border-left:3px solid var(--accent)">
-                <strong style="color:var(--text)">Note:</strong> Genlock mode is configured via CLI arguments. Restart required to change mode.
-            </div>
+            <div class="ig"><label>Sync Mode</label><select id="glmd"><option value="disabled">Disabled</option><option value="master">Master</option><option value="slave">Slave</option></select></div>
+            <div class="ig" id="glmast" style="display:none"><label>Master Address</label><input id="gladdr" placeholder="127.0.0.1:5960"></div>
+            <div class="btns"><button class="btn-p" onclick="applyGL()" style="flex:1">Apply</button></div>
         </div>
         <div class="card"><div class="card-h"><div class="card-i">S</div><div class="card-t">System</div></div>
             <div class="stats" style="margin-bottom:1rem">
@@ -134,7 +134,9 @@ static const char* CONTROL_PANEL_HTML = R"HTMLEND(
 async function stat(){try{const r=await fetch('/status'),d=await r.json();$('ndi').textContent=d.ndi_name;$('conn').textContent=d.ndi_connections;$('res').textContent=d.width+'x'+d.height;$('fps').textContent=d.fps;$('afps').textContent=(d.actual_fps||0).toFixed(1);if(document.activeElement!==$('url'))$('url').value=d.url||'';if(d.color){$('cs').value=d.color.colorspace;$('gm').value=d.color.gamma;$('rg').value=d.color.range;$('cm').textContent=d.color.colorspace;updP(d.color)}updGenlock(d.genlock,d.genlocked);$('dot').style.background=d.running?'var(--ok)':'var(--err)';$('st').textContent=d.running?'Running':'Stopped'}catch(e){$('dot').style.background='var(--err)';$('st').textContent='Disconnected'}}
 function $(id){return document.getElementById(id)}
 function updP(c){document.querySelectorAll('.preset').forEach(b=>b.classList.remove('on'));if(c.colorspace==='BT709'&&c.gamma==='BT709'&&c.range==='full')$('p-rec709').classList.add('on');else if(c.colorspace==='BT2020'&&c.gamma==='BT2020')$('p-rec2020').classList.add('on');else if(c.colorspace==='sRGB'&&c.gamma==='sRGB')$('p-srgb').classList.add('on');else if(c.colorspace==='BT601')$('p-rec601').classList.add('on')}
-function updGenlock(gl,locked){if(!gl){$('glmode').textContent='Disabled';$('glsync').textContent='N/A';$('gloffset').textContent='N/A';$('gljitter').textContent='N/A';return}const mode=gl.mode||'disabled';$('glmode').textContent=mode.charAt(0).toUpperCase()+mode.slice(1);$('glmode').style.color=mode==='master'?'var(--accent)':mode==='slave'?'var(--ok)':'var(--dim)';const synced=gl.synchronized||false;$('glsync').textContent=synced?'Synced':'Not Synced';$('glsync').style.color=synced?'var(--ok)':'var(--err)';if(mode==='slave'&&gl.offset_us!==undefined){const offset=gl.offset_us;const absOffset=Math.abs(offset);$('gloffset').textContent=(offset>=0?'+':'')+offset+'μs';$('gloffset').style.color=absOffset<1000?'var(--ok)':absOffset<5000?'#f59e0b':'var(--err)';if(gl.stats&&gl.stats.jitter_us!==undefined){const jitter=gl.stats.jitter_us;$('gljitter').textContent=jitter.toFixed(1)+'μs';$('gljitter').style.color=jitter<500?'var(--ok)':jitter<1000?'#f59e0b':'var(--err)'}else{$('gljitter').textContent='N/A'}}else{$('gloffset').textContent='N/A';$('gljitter').textContent='N/A'}}
+function updGenlock(gl,locked){if(!gl){$('glmode').textContent='Disabled';$('glsync').textContent='N/A';$('gloffset').textContent='N/A';$('gljitter').textContent='N/A';$('glmd').value='disabled';return}const mode=gl.mode||'disabled';$('glmode').textContent=mode.charAt(0).toUpperCase()+mode.slice(1);$('glmode').style.color=mode==='master'?'var(--accent)':mode==='slave'?'var(--ok)':'var(--dim)';$('glmd').value=mode;$('glmast').style.display=mode==='slave'?'block':'none';const synced=gl.synchronized||false;$('glsync').textContent=synced?'Synced':'Not Synced';$('glsync').style.color=synced?'var(--ok)':'var(--err)';if(mode==='slave'&&gl.offset_us!==undefined){const offset=gl.offset_us;const absOffset=Math.abs(offset);$('gloffset').textContent=(offset>=0?'+':'')+offset+'μs';$('gloffset').style.color=absOffset<1000?'var(--ok)':absOffset<5000?'#f59e0b':'var(--err)';if(gl.stats&&gl.stats.jitter_us!==undefined){const jitter=gl.stats.jitter_us;$('gljitter').textContent=jitter.toFixed(1)+'μs';$('gljitter').style.color=jitter<500?'var(--ok)':jitter<1000?'#f59e0b':'var(--err)'}else{$('gljitter').textContent='N/A'}}else{$('gloffset').textContent='N/A';$('gljitter').textContent='N/A'}}
+async function applyGL(){const mode=$('glmd').value;const addr=$('gladdr').value;const body={mode};if(mode==='slave'&&addr)body.master_address=addr;try{const r=await fetch('/genlock',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});const d=await r.json();toast(d.success?'Genlock updated!':d.error||'Failed',d.success?'ok':'err');if(d.success)stat()}catch(e){toast('Failed to update genlock','err')}}
+$('glmd').addEventListener('change',e=>{$('glmast').style.display=e.target.value==='slave'?'block':'none'})
 async function setUrl(){const u=$('url').value;if(!u)return toast('Enter a URL','err');try{const r=await fetch('/seturl',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url:u})});const d=await r.json();toast(d.success?'URL loaded!':d.error,d.success?'ok':'err')}catch(e){toast('Failed','err')}}
 async function reload(){try{await fetch('/reload',{method:'POST'});toast('Reloaded!','ok')}catch(e){toast('Failed','err')}}
 async function setP(p){try{const r=await fetch('/color',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({preset:p})});const d=await r.json();if(d.success){toast(p.toUpperCase(),'ok');stat()}}catch(e){toast('Failed','err')}}
@@ -648,14 +650,56 @@ void HttpServer::setup_routes() {
         try {
             auto body = json::parse(req.body);
             
-            // Note: Genlock mode changes require restart in current implementation
-            // This endpoint documents the API for future dynamic reconfiguration
+            auto genlock = app_->genlock_clock();
+            if (!genlock) {
+                res.status = 400;
+                json error = {{"error", "Genlock not initialized"}};
+                res.set_content(error.dump(), "application/json");
+                return;
+            }
             
-            res.status = 501; // Not Implemented
+            // Update mode
+            if (body.contains("mode")) {
+                std::string mode_str = body["mode"].get<std::string>();
+                GenlockMode new_mode;
+                
+                if (mode_str == "master") {
+                    new_mode = GenlockMode::Master;
+                } else if (mode_str == "slave") {
+                    new_mode = GenlockMode::Slave;
+                } else if (mode_str == "disabled") {
+                    new_mode = GenlockMode::Disabled;
+                } else {
+                    res.status = 400;
+                    json error = {{"error", "Invalid mode. Use: master, slave, or disabled"}};
+                    res.set_content(error.dump(), "application/json");
+                    return;
+                }
+                
+                LOG_INFO("HTTP API: changing genlock mode to %s", mode_str.c_str());
+                genlock->set_mode(new_mode);
+            }
+            
+            // Update master address (for slave mode)
+            if (body.contains("master_address")) {
+                std::string address = body["master_address"].get<std::string>();
+                LOG_INFO("HTTP API: changing genlock master to %s", address.c_str());
+                genlock->set_master_address(address);
+            }
+            
+            // Get current status
+            std::string current_mode = "disabled";
+            switch (genlock->mode()) {
+                case GenlockMode::Master: current_mode = "master"; break;
+                case GenlockMode::Slave: current_mode = "slave"; break;
+                case GenlockMode::Disabled: current_mode = "disabled"; break;
+            }
+            
+            res.status = 200;
             json response = {
-                {"error", "Genlock configuration requires restart. Use --genlock CLI flag."},
-                {"current_mode", app_->config().genlock_mode},
-                {"hint", "Restart with --genlock master|slave|disabled"}
+                {"success", true},
+                {"mode", current_mode},
+                {"synchronized", genlock->is_synchronized()}
             };
             res.set_content(response.dump(), "application/json");
             

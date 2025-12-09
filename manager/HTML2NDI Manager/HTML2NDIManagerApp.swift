@@ -6,41 +6,56 @@ struct HTML2NDIManagerApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     
     var body: some Scene {
-        // No scenes - this is a menu bar only app
-        // The popover is managed by AppDelegate
-        Settings {
-            EmptyView()
+        WindowGroup {
+            DashboardView()
+                .frame(minWidth: 800, minHeight: 600)
         }
+        .windowStyle(.titleBar)
+        .windowToolbarStyle(.unified)
         .commands {
-            // Remove default menu items
-            CommandGroup(replacing: .newItem) {}
+            CommandGroup(after: .appInfo) {
+                Button("Open Web Dashboard") {
+                    appDelegate.openDashboard()
+                }
+                .keyboardShortcut("d", modifiers: .command)
+            }
         }
     }
 }
 
 class AppDelegate: NSObject, NSApplicationDelegate {
     var statusItem: NSStatusItem?
-    var popover: NSPopover?
     var streamManager = StreamManager.shared
     
     func applicationDidFinishLaunching(_ notification: Notification) {
-        // Hide dock icon - menu bar only
-        NSApp.setActivationPolicy(.accessory)
+        // Show in dock (we have a window now!)
+        NSApp.setActivationPolicy(.regular)
         
-        // Create status bar item
+        // Create menu bar item for quick access
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         
         if let button = statusItem?.button {
             button.image = NSImage(systemSymbolName: "tv.fill", accessibilityDescription: "HTML2NDI")
-            button.action = #selector(togglePopover)
+            button.action = #selector(showMainWindow)
             button.target = self
         }
         
-        // Create popover
-        popover = NSPopover()
-        popover?.contentSize = NSSize(width: 320, height: 400)
-        popover?.behavior = .transient
-        popover?.contentViewController = NSHostingController(rootView: MenuBarView())
+        // Create menu bar menu
+        let menu = NSMenu()
+        
+        menu.addItem(NSMenuItem(title: "Show Dashboard", action: #selector(showMainWindow), keyEquivalent: ""))
+        menu.addItem(NSMenuItem(title: "Open Web Dashboard", action: #selector(openDashboard), keyEquivalent: "d"))
+        menu.addItem(NSMenuItem.separator())
+        
+        let startAllItem = NSMenuItem(title: "Start All Streams", action: #selector(startAllStreams), keyEquivalent: "")
+        let stopAllItem = NSMenuItem(title: "Stop All Streams", action: #selector(stopAllStreams), keyEquivalent: "")
+        menu.addItem(startAllItem)
+        menu.addItem(stopAllItem)
+        
+        menu.addItem(NSMenuItem.separator())
+        menu.addItem(NSMenuItem(title: "Quit", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
+        
+        statusItem?.menu = menu
         
         // Load saved streams
         streamManager.loadStreams()
@@ -57,21 +72,33 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         ManagerServer.shared.stop()
     }
     
-    @objc func togglePopover() {
-        if let button = statusItem?.button {
-            if popover?.isShown == true {
-                popover?.performClose(nil)
-            } else {
-                popover?.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
-                NSApp.activate(ignoringOtherApps: true)
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
+        // Don't quit when window is closed - stay in menu bar
+        return false
+    }
+    
+    @objc func showMainWindow() {
+        NSApp.activate(ignoringOtherApps: true)
+        for window in NSApplication.shared.windows {
+            if window.title.contains("HTML2NDI") || window.isVisible {
+                window.makeKeyAndOrderFront(nil)
+                return
             }
         }
     }
     
-    func openDashboard() {
+    @objc func openDashboard() {
         if let url = URL(string: "http://localhost:8080") {
             NSWorkspace.shared.open(url)
         }
+    }
+    
+    @objc func startAllStreams() {
+        streamManager.startAll()
+    }
+    
+    @objc func stopAllStreams() {
+        streamManager.stopAll()
     }
 }
 

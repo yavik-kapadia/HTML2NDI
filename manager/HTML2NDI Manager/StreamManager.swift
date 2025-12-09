@@ -35,8 +35,17 @@ struct StreamConfig: Codable, Identifiable {
     }
 }
 
-class StreamInstance: ObservableObject, Identifiable {
+class StreamInstance: ObservableObject, Identifiable, Hashable {
     let id: UUID
+    
+    // Hashable conformance
+    static func == (lhs: StreamInstance, rhs: StreamInstance) -> Bool {
+        return lhs.id == rhs.id
+    }
+    
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(id)
+    }
     @Published var config: StreamConfig
     @Published var isRunning: Bool = false
     @Published var status: StreamStatus?
