@@ -1,0 +1,115 @@
+═══════════════════════════════════════════════════════════════════════════════
+  HTML2NDI SECURITY AUDIT - EXECUTIVE SUMMARY
+═══════════════════════════════════════════════════════════════════════════════
+
+Date: December 7, 2025
+Version: 1.5.0-alpha
+Status: SAFE for local/trusted networks, NEEDS HARDENING for production
+
+═══════════════════════════════════════════════════════════════════════════════
+  FINDINGS SUMMARY
+═══════════════════════════════════════════════════════════════════════════════
+
+🔴 CRITICAL (2):
+  1. No Authentication on HTTP API - Anyone on localhost can control streams
+  2. SSRF via /seturl - Can load file:// URLs and access internal services
+
+🟠 HIGH (3):
+  3. Unrestricted CORS (Access-Control-Allow-Origin: *)
+  4. Unauthenticated UDP Genlock packets (can be spoofed)
+  5. Input validation weaknesses (exception handling)
+
+🟡 MEDIUM (2):
+  6. HTTP binds to 0.0.0.0 (all interfaces) by default
+  7. Path traversal risk in --log-file
+
+🟢 LOW (2):
+  8. Unsafe sprintf in stb_image_write (suppressed, library is audited)
+  9. GitHub secrets properly handled (OIDC, encrypted)
+
+═══════════════════════════════════════════════════════════════════════════════
+  IMMEDIATE ACTION REQUIRED (Before v1.5.0 Stable)
+═══════════════════════════════════════════════════════════════════════════════
+
+Priority 1 - Fix These First:
+
+[ ] Add API key authentication:
+    - Add --api-key flag
+    - Validate X-API-Key header on all endpoints
+    - Store key in macOS Keychain
+
+[ ] Block SSRF attacks in /seturl:
+    - Only allow http:// and https://
+    - Block file://, ftp://, gopher://
+    - Block private IPs: 127.x, 10.x, 192.168.x, 169.254.x
+
+[ ] Secure default HTTP binding:
+    - Default to 127.0.0.1 (localhost only)
+    - Support --http-host <specific-ip> for broadcast networks
+    - Warn when binding to non-localhost without API key
+
+═══════════════════════════════════════════════════════════════════════════════
+  SECURITY GRADE
+═══════════════════════════════════════════════════════════════════════════════
+
+Overall: B- (Good for local use, needs work for production)
+
+✅ STRENGTHS:
+  - No hardcoded secrets
+  - Proper GitHub Actions security (OIDC)
+  - Good input clamping (width/height/quality)
+  - Thread-safe code (RAII, smart pointers)
+  - Isolated CEF cache per stream
+  - No unsafe shell execution
+
+⚠️  WEAKNESSES:
+  - No authentication layer
+  - Wide-open CORS
+  - URL validation missing
+  - Genlock packets unsigned
+
+═══════════════════════════════════════════════════════════════════════════════
+  DEPLOYMENT RECOMMENDATIONS
+═══════════════════════════════════════════════════════════════════════════════
+
+✅ SAFE FOR:
+  - Single-user macOS workstation
+  - Isolated broadcast networks
+  - Localhost-only deployments
+  - Trusted LAN environments
+
+⚠️  NOT SAFE FOR:
+  - Public internet exposure
+  - Multi-tenant environments
+  - Untrusted users on same machine
+  - Production without authentication
+
+═══════════════════════════════════════════════════════════════════════════════
+  QUICK SECURITY TEST
+═══════════════════════════════════════════════════════════════════════════════
+
+Run these commands to test your setup:
+
+  # 1. Check what interfaces HTTP is bound to
+  lsof -i -P | grep html2ndi
+  # ✅ Good: 127.0.0.1:8080
+  # ⚠️  Bad: *:8080 (all interfaces)
+
+  # 2. Test SSRF protection
+  curl -X POST http://localhost:8080/seturl -d '{"url": "file:///etc/passwd"}'
+  # ✅ Should return: 400 Bad Request (blocked)
+  # ⚠️  Currently returns: 200 OK (vulnerable!)
+
+  # 3. Test authentication
+  curl http://localhost:8080/status
+  # ✅ Should return: 401 Unauthorized (if auth enabled)
+  # ⚠️  Currently returns: 200 OK (no auth)
+
+═══════════════════════════════════════════════════════════════════════════════
+  DETAILED REPORTS
+═══════════════════════════════════════════════════════════════════════════════
+
+Full Audit:     docs/SECURITY_AUDIT.md (comprehensive analysis)
+Checklist:      docs/SECURITY_CHECKLIST.md (actionable items)
+
+═══════════════════════════════════════════════════════════════════════════════
