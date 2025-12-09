@@ -97,7 +97,7 @@ void NdiSender::send_video_frame(
     video_frame_.picture_aspect_ratio = static_cast<float>(width) / static_cast<float>(height);
     video_frame_.frame_format_type = progressive 
         ? NDIlib_frame_format_type_progressive 
-        : NDIlib_frame_format_type_interleaved_NTSC;
+        : NDIlib_frame_format_type_interleaved;
 
 
 
