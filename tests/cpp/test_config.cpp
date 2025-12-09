@@ -138,8 +138,10 @@ TEST_F(ConfigTest, StandardResolutions) {
         {1024, 768, true},    // XGA
         {854, 480, true},     // FWVGA
         {640, 480, true},     // SD
-        {0, 0, false},        // Invalid
-        {100000, 100000, true}, // Very large but technically valid
+        {7680, 4320, true},   // 8K UHD (max valid)
+        {0, 0, false},        // Invalid: zero
+        {100000, 100000, false}, // Invalid: exceeds max (7680x4320)
+        {10, 10, false},      // Invalid: below min (16)
     };
     
     for (const auto& tc : test_cases) {
