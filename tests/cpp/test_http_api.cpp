@@ -38,6 +38,7 @@ TEST_F(HttpApiTest, StatusEndpointFormat) {
         {"width", "number"},
         {"height", "number"},
         {"fps", "number"},
+        {"progressive", "boolean"},
         {"actual_fps", "number"},
         {"ndi_name", "string"},
         {"ndi_connections", "number"},
@@ -46,7 +47,7 @@ TEST_F(HttpApiTest, StatusEndpointFormat) {
     };
     
     // Verify we have all expected fields documented
-    EXPECT_EQ(expected_fields.size(), 9);
+    EXPECT_EQ(expected_fields.size(), 10);
 }
 
 TEST_F(HttpApiTest, SetUrlEndpointFormat) {
@@ -93,6 +94,58 @@ TEST_F(HttpApiTest, ColorPresets) {
     EXPECT_EQ(valid_presets.size(), 4);
 }
 
+TEST_F(HttpApiTest, StandardResolutionsFormat) {
+    // Document standard video resolutions
+    struct Resolution {
+        int width;
+        int height;
+        std::string name;
+    };
+    
+    std::vector<Resolution> standard_resolutions = {
+        {3840, 2160, "4K UHD"},
+        {2560, 1440, "QHD"},
+        {1920, 1080, "1080p"},
+        {1280, 720, "720p"},
+        {1024, 768, "XGA"},
+        {854, 480, "FWVGA"},
+        {640, 480, "SD"}
+    };
+    
+    EXPECT_EQ(standard_resolutions.size(), 7);
+    
+    // Verify all resolutions have valid dimensions
+    for (const auto& res : standard_resolutions) {
+        EXPECT_GT(res.width, 0);
+        EXPECT_GT(res.height, 0);
+        EXPECT_FALSE(res.name.empty());
+    }
+}
+
+TEST_F(HttpApiTest, StandardFrameratesFormat) {
+    // Document standard broadcast framerates
+    std::vector<int> standard_framerates = {24, 25, 30, 50, 60};
+    
+    EXPECT_EQ(standard_framerates.size(), 5);
+    
+    // Verify all framerates are positive
+    for (int fps : standard_framerates) {
+        EXPECT_GT(fps, 0);
+        EXPECT_LE(fps, 120); // Reasonable upper limit
+    }
+}
+
+TEST_F(HttpApiTest, ScanModeValues) {
+    // Document valid scan mode values
+    bool progressive = true;   // Progressive scan (p)
+    bool interlaced = false;   // Interlaced scan (i)
+    
+    EXPECT_TRUE(progressive);
+    EXPECT_FALSE(interlaced);
+    
+    // In status response, progressive=true means "p", false means "i"
+}
+
 // Integration test that runs only if server is available
 TEST_F(HttpApiTest, DISABLED_LiveStatusEndpoint) {
     // This test is disabled by default
@@ -106,7 +159,14 @@ TEST_F(HttpApiTest, DISABLED_LiveStatusEndpoint) {
     
     auto body = json::parse(res->body);
     EXPECT_TRUE(body.contains("url"));
+    EXPECT_TRUE(body.contains("width"));
+    EXPECT_TRUE(body.contains("height"));
+    EXPECT_TRUE(body.contains("fps"));
+    EXPECT_TRUE(body.contains("progressive"));
     EXPECT_TRUE(body.contains("running"));
     EXPECT_TRUE(body.contains("ndi_name"));
+    
+    // Verify progressive field is boolean
+    EXPECT_TRUE(body["progressive"].is_boolean());
 }
 

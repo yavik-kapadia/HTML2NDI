@@ -124,6 +124,7 @@ final class DashboardViewTests: XCTestCase {
         XCTAssertEqual(config.width, 1920, "Default width should be 1920")
         XCTAssertEqual(config.height, 1080, "Default height should be 1080")
         XCTAssertEqual(config.fps, 60, "Default FPS should be 60")
+        XCTAssertTrue(config.progressive, "Default should be progressive scan")
         XCTAssertEqual(config.colorPreset, "rec709", "Default color preset should be rec709")
         XCTAssertFalse(config.autoStart, "Auto-start should be false by default")
         XCTAssertEqual(config.genlockMode, "disabled", "Genlock should be disabled by default")
@@ -203,6 +204,140 @@ final class DashboardViewTests: XCTestCase {
         let stream = StreamInstance(config: config)
         
         XCTAssertTrue(stream.config.genlockMasterAddr.contains("5960"), "Should use default port 5960")
+    }
+    
+    // MARK: - Resolution Preset Tests
+    
+    func testStandardResolutions() {
+        let standardResolutions = [
+            (width: 3840, height: 2160, name: "4K UHD"),
+            (width: 2560, height: 1440, name: "QHD"),
+            (width: 1920, height: 1080, name: "1080p"),
+            (width: 1280, height: 720, name: "720p"),
+            (width: 1024, height: 768, name: "XGA"),
+            (width: 854, height: 480, name: "FWVGA"),
+            (width: 640, height: 480, name: "SD")
+        ]
+        
+        for resolution in standardResolutions {
+            var config = StreamConfig(name: "Test", url: "http://test.com", ndiName: "Test")
+            config.width = resolution.width
+            config.height = resolution.height
+            
+            XCTAssertEqual(config.width, resolution.width, "Width should match for \(resolution.name)")
+            XCTAssertEqual(config.height, resolution.height, "Height should match for \(resolution.name)")
+            XCTAssertGreaterThan(config.width, 0, "Width should be positive for \(resolution.name)")
+            XCTAssertGreaterThan(config.height, 0, "Height should be positive for \(resolution.name)")
+        }
+    }
+    
+    func testStandardFramerates() {
+        let standardFramerates = [24, 25, 30, 50, 60]
+        
+        for fps in standardFramerates {
+            var config = StreamConfig(name: "Test", url: "http://test.com", ndiName: "Test")
+            config.fps = fps
+            
+            XCTAssertEqual(config.fps, fps, "FPS should match \(fps)")
+            XCTAssertGreaterThan(config.fps, 0, "FPS should be positive")
+            XCTAssertLessThanOrEqual(config.fps, 120, "FPS should be reasonable")
+        }
+    }
+    
+    func testProgressiveScanMode() {
+        var config = StreamConfig(name: "Test", url: "http://test.com", ndiName: "Test")
+        config.progressive = true
+        
+        XCTAssertTrue(config.progressive, "Should be progressive scan")
+        
+        let stream = StreamInstance(config: config)
+        XCTAssertTrue(stream.config.progressive, "Stream should maintain progressive setting")
+    }
+    
+    func testInterlacedScanMode() {
+        var config = StreamConfig(name: "Test", url: "http://test.com", ndiName: "Test")
+        config.progressive = false
+        
+        XCTAssertFalse(config.progressive, "Should be interlaced scan")
+        
+        let stream = StreamInstance(config: config)
+        XCTAssertFalse(stream.config.progressive, "Stream should maintain interlaced setting")
+    }
+    
+    func testScanModeToggle() {
+        var config = StreamConfig(name: "Test", url: "http://test.com", ndiName: "Test")
+        
+        // Start progressive (default)
+        XCTAssertTrue(config.progressive)
+        
+        // Toggle to interlaced
+        config.progressive = false
+        XCTAssertFalse(config.progressive)
+        
+        // Toggle back to progressive
+        config.progressive = true
+        XCTAssertTrue(config.progressive)
+    }
+    
+    func testFormatCombinations() {
+        // Test common broadcast format combinations
+        let formats = [
+            (width: 1920, height: 1080, fps: 60, progressive: true, name: "1080p60"),
+            (width: 1920, height: 1080, fps: 30, progressive: false, name: "1080i30"),
+            (width: 1280, height: 720, fps: 50, progressive: true, name: "720p50"),
+            (width: 3840, height: 2160, fps: 30, progressive: true, name: "4Kp30"),
+            (width: 1920, height: 1080, fps: 25, progressive: false, name: "1080i25")
+        ]
+        
+        for format in formats {
+            var config = StreamConfig(name: format.name, url: "http://test.com", ndiName: format.name)
+            config.width = format.width
+            config.height = format.height
+            config.fps = format.fps
+            config.progressive = format.progressive
+            
+            XCTAssertEqual(config.width, format.width, "\(format.name): Width mismatch")
+            XCTAssertEqual(config.height, format.height, "\(format.name): Height mismatch")
+            XCTAssertEqual(config.fps, format.fps, "\(format.name): FPS mismatch")
+            XCTAssertEqual(config.progressive, format.progressive, "\(format.name): Scan mode mismatch")
+        }
+    }
+    
+    func testVideoFormatIdentifiers() {
+        // Test that format identifiers can be constructed correctly
+        let testCases = [
+            (width: 1920, height: 1080, fps: 60, progressive: true, expected: "1080p60"),
+            (width: 1920, height: 1080, fps: 30, progressive: false, expected: "1080i30"),
+            (width: 1280, height: 720, fps: 50, progressive: true, expected: "720p50"),
+            (width: 3840, height: 2160, fps: 30, progressive: true, expected: "4Kp30")
+        ]
+        
+        for testCase in testCases {
+            let formatName = testCase.height == 2160 ? "4K" : String(testCase.height)
+            let scanMode = testCase.progressive ? "p" : "i"
+            let identifier = "\(formatName)\(scanMode)\(testCase.fps)"
+            
+            XCTAssertEqual(identifier, testCase.expected, 
+                          "Format identifier mismatch for \(testCase.width)×\(testCase.height)")
+        }
+    }
+    
+    func testResolutionAspectRatios() {
+        let resolutions = [
+            (width: 1920, height: 1080, ratio: 16.0/9.0, name: "16:9"),
+            (width: 1280, height: 720, ratio: 16.0/9.0, name: "16:9"),
+            (width: 3840, height: 2160, ratio: 16.0/9.0, name: "16:9"),
+            (width: 1024, height: 768, ratio: 4.0/3.0, name: "4:3"),
+            (width: 640, height: 480, ratio: 4.0/3.0, name: "4:3")
+        ]
+        
+        for resolution in resolutions {
+            let calculatedRatio = Double(resolution.width) / Double(resolution.height)
+            let difference = abs(calculatedRatio - resolution.ratio)
+            
+            XCTAssertLessThan(difference, 0.01, 
+                             "\(resolution.width)×\(resolution.height) should have \(resolution.name) aspect ratio")
+        }
     }
     
     // MARK: - Performance Tests

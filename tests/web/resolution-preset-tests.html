@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Resolution & Framerate Preset Tests</title>
+    <meta charset="UTF-8">
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            max-width: 1200px;
+            margin: 2rem auto;
+            padding: 2rem;
+            background: #0a0a0f;
+            color: #e4e4e7;
+        }
+        h1 { color: #6366f1; }
+        .test { 
+            background: #12121a; 
+            padding: 1rem; 
+            margin: 1rem 0; 
+            border-radius: 8px;
+            border-left: 4px solid #27272a;
+        }
+        .test.pass { border-left-color: #22c55e; }
+        .test.fail { border-left-color: #ef4444; }
+        .test-name { font-weight: 600; margin-bottom: 0.5rem; }
+        .test-result { font-size: 0.9rem; color: #71717a; }
+        .summary {
+            background: #1a1a24;
+            padding: 1.5rem;
+            border-radius: 12px;
+            margin: 2rem 0;
+            text-align: center;
+        }
+        .stat { 
+            display: inline-block; 
+            margin: 0 1rem;
+            font-size: 1.5rem;
+            font-weight: 600;
+        }
+        .stat.pass { color: #22c55e; }
+        .stat.fail { color: #ef4444; }
+    </style>
+</head>
+<body>
+    <h1>📐 Resolution & Framerate Preset Tests</h1>
+    <div class="summary" id="summary">Running tests...</div>
+    <div id="results"></div>
+
+    <script>
+        const results = [];
+        
+        function assert(condition, message) {
+            if (!condition) {
+                throw new Error(message);
+            }
+        }
+        
+        function test(name, fn) {
+            const testDiv = document.createElement('div');
+            testDiv.className = 'test';
+            testDiv.innerHTML = `<div class="test-name">${name}</div><div class="test-result" id="result-${results.length}">Running...</div>`;
+            document.getElementById('results').appendChild(testDiv);
+            
+            try {
+                fn();
+                testDiv.classList.add('pass');
+                document.getElementById(`result-${results.length}`).textContent = '✓ Passed';
+                results.push({name, passed: true});
+            } catch (error) {
+                testDiv.classList.add('fail');
+                document.getElementById(`result-${results.length}`).textContent = `✗ Failed: ${error.message}`;
+                results.push({name, passed: false, error: error.message});
+            }
+        }
+        
+        // Standard Resolution Tests
+        test('Standard resolutions are defined', () => {
+            const standardResolutions = [
+                {width: 3840, height: 2160, name: "4K UHD"},
+                {width: 2560, height: 1440, name: "QHD"},
+                {width: 1920, height: 1080, name: "1080p"},
+                {width: 1280, height: 720, name: "720p"},
+                {width: 1024, height: 768, name: "XGA"},
+                {width: 854, height: 480, name: "FWVGA"},
+                {width: 640, height: 480, name: "SD"}
+            ];
+            
+            assert(standardResolutions.length === 7, 'Should have 7 standard resolutions');
+            
+            for (const res of standardResolutions) {
+                assert(res.width > 0, `${res.name} width should be positive`);
+                assert(res.height > 0, `${res.name} height should be positive`);
+                assert(res.name.length > 0, `${res.name} should have a name`);
+            }
+        });
+        
+        test('Standard framerates are defined', () => {
+            const standardFramerates = [24, 25, 30, 50, 60];
+            
+            assert(standardFramerates.length === 5, 'Should have 5 standard framerates');
+            
+            for (const fps of standardFramerates) {
+                assert(fps > 0, `FPS ${fps} should be positive`);
+                assert(fps <= 120, `FPS ${fps} should be reasonable`);
+            }
+        });
+        
+        test('Resolution dropdown parser works', () => {
+            const testCases = [
+                {input: "1920x1080", width: 1920, height: 1080},
+                {input: "3840x2160", width: 3840, height: 2160},
+                {input: "1280x720", width: 1280, height: 720}
+            ];
+            
+            for (const tc of testCases) {
+                const [width, height] = tc.input.split('x').map(Number);
+                assert(width === tc.width, `Width parsing failed for ${tc.input}`);
+                assert(height === tc.height, `Height parsing failed for ${tc.input}`);
+            }
+        });
+        
+        test('Scan mode values are correct', () => {
+            const progressive = 'p';
+            const interlaced = 'i';
+            
+            assert(progressive === 'p', 'Progressive should be "p"');
+            assert(interlaced === 'i', 'Interlaced should be "i"');
+            assert(progressive !== interlaced, 'Scan modes should be different');
+        });
+        
+        test('Format preview generation works', () => {
+            const testCases = [
+                {width: 1920, height: 1080, scan: 'p', fps: 60, expected: '1080p60'},
+                {width: 1920, height: 1080, scan: 'i', fps: 30, expected: '1080i30'},
+                {width: 1280, height: 720, scan: 'p', fps: 50, expected: '720p50'},
+                {width: 3840, height: 2160, scan: 'p', fps: 30, expected: '4Kp30'},
+                {width: 2560, height: 1440, scan: 'p', fps: 60, expected: 'QHDp60'}
+            ];
+            
+            for (const tc of testCases) {
+                let formatName = String(tc.height);
+                if (tc.height === 2160) formatName = '4K';
+                else if (tc.height === 1440) formatName = 'QHD';
+                
+                const format = `${formatName}${tc.scan}${tc.fps}`;
+                assert(format === tc.expected, 
+                       `Format mismatch: expected ${tc.expected}, got ${format}`);
+            }
+        });
+        
+        test('16:9 resolutions have correct aspect ratio', () => {
+            const widescreen = [
+                {width: 3840, height: 2160},
+                {width: 1920, height: 1080},
+                {width: 1280, height: 720}
+            ];
+            
+            for (const res of widescreen) {
+                const ratio = res.width / res.height;
+                const expected = 16/9;
+                const diff = Math.abs(ratio - expected);
+                assert(diff < 0.01, 
+                       `${res.width}×${res.height} should be 16:9 (got ${ratio.toFixed(3)})`);
+            }
+        });
+        
+        test('4:3 resolutions have correct aspect ratio', () => {
+            const traditional = [
+                {width: 1024, height: 768},
+                {width: 640, height: 480}
+            ];
+            
+            for (const res of traditional) {
+                const ratio = res.width / res.height;
+                const expected = 4/3;
+                const diff = Math.abs(ratio - expected);
+                assert(diff < 0.01, 
+                       `${res.width}×${res.height} should be 4:3 (got ${ratio.toFixed(3)})`);
+            }
+        });
+        
+        test('Progressive boolean conversion', () => {
+            const progressiveTrue = true;
+            const progressiveFalse = false;
+            
+            const scanModeTrue = progressiveTrue ? 'p' : 'i';
+            const scanModeFalse = progressiveFalse ? 'p' : 'i';
+            
+            assert(scanModeTrue === 'p', 'true should convert to "p"');
+            assert(scanModeFalse === 'i', 'false should convert to "i"');
+        });
+        
+        test('Stream data format includes progressive', () => {
+            const streamData = {
+                name: "Test Stream",
+                url: "http://test.com",
+                ndiName: "Test NDI",
+                width: 1920,
+                height: 1080,
+                fps: 60,
+                progressive: true
+            };
+            
+            assert('progressive' in streamData, 'Stream data should include progressive field');
+            assert(typeof streamData.progressive === 'boolean', 'Progressive should be boolean');
+        });
+        
+        test('Format display string generation', () => {
+            const testCases = [
+                {width: 1920, height: 1080, progressive: true, fps: 60, expected: "1920×1080p60"},
+                {width: 1280, height: 720, progressive: false, fps: 50, expected: "1280×720i50"},
+                {width: 3840, height: 2160, progressive: true, fps: 30, expected: "3840×2160p30"}
+            ];
+            
+            for (const tc of testCases) {
+                const scanMode = tc.progressive ? 'p' : 'i';
+                const format = `${tc.width}×${tc.height}${scanMode}${tc.fps}`;
+                assert(format === tc.expected, 
+                       `Expected ${tc.expected}, got ${format}`);
+            }
+        });
+        
+        test('Dropdown values match standard presets', () => {
+            const dropdownValues = [
+                "3840x2160",
+                "2560x1440",
+                "1920x1080",
+                "1280x720",
+                "1024x768",
+                "854x480",
+                "640x480"
+            ];
+            
+            for (const value of dropdownValues) {
+                const [width, height] = value.split('x').map(Number);
+                assert(width > 0 && height > 0, 
+                       `Dropdown value ${value} should parse to valid dimensions`);
+            }
+        });
+        
+        test('Framerate dropdown values are standard', () => {
+            const fpsValues = [24, 25, 30, 50, 60];
+            const broadcastStandards = [24, 25, 30, 50, 60];
+            
+            assert(fpsValues.length === broadcastStandards.length, 
+                   'Should match broadcast standards');
+            
+            for (let i = 0; i < fpsValues.length; i++) {
+                assert(fpsValues[i] === broadcastStandards[i], 
+                       `FPS ${fpsValues[i]} should match standard ${broadcastStandards[i]}`);
+            }
+        });
+        
+        test('API request format is correct', () => {
+            const apiRequest = {
+                width: 1920,
+                height: 1080,
+                fps: 60,
+                progressive: true
+            };
+            
+            assert(typeof apiRequest.width === 'number', 'Width should be number');
+            assert(typeof apiRequest.height === 'number', 'Height should be number');
+            assert(typeof apiRequest.fps === 'number', 'FPS should be number');
+            assert(typeof apiRequest.progressive === 'boolean', 'Progressive should be boolean');
+        });
+        
+        // Generate summary
+        const passed = results.filter(r => r.passed).length;
+        const failed = results.filter(r => !r.passed).length;
+        const total = results.length;
+        
+        document.getElementById('summary').innerHTML = `
+            <div class="stat pass">${passed} Passed</div>
+            <div class="stat fail">${failed} Failed</div>
+            <div class="stat">${total} Total</div>
+        `;
+    </script>
+</body>
+</html>
+

@@ -1,6 +1,6 @@
 # Web Dashboard Tests
 
-Automated tests for the HTML2NDI dashboard UI and genlock controls.
+Automated tests for the HTML2NDI dashboard UI, genlock controls, and resolution/framerate presets.
 
 ## Running Tests
 
@@ -11,9 +11,18 @@ Automated tests for the HTML2NDI dashboard UI and genlock controls.
 open tests/web/genlock-dashboard-tests.html
 ```
 
-The test suite will automatically run and display results.
+### Resolution & Framerate Preset Tests
+
+```bash
+# Open in browser
+open tests/web/resolution-preset-tests.html
+```
+
+The test suites will automatically run and display results.
 
 ### Test Categories
+
+#### Genlock Tests
 
 1. **API Integration Tests**
    - Mode switching (disabled/master/slave)
@@ -38,6 +47,28 @@ The test suite will automatically run and display results.
    - Sync status tracking
    - Packet statistics
 
+#### Resolution & Framerate Tests
+
+1. **Standard Presets**
+   - 7 standard resolutions (4K, QHD, 1080p, 720p, XGA, FWVGA, SD)
+   - 5 standard framerates (24, 25, 30, 50, 60 fps)
+   - Progressive/interlaced scan modes
+
+2. **Format Validation**
+   - Resolution parsing (widthxheight)
+   - Aspect ratio calculations (16:9, 4:3)
+   - Format identifier generation (1080p60, 720i50, etc.)
+
+3. **API Integration**
+   - Progressive boolean field
+   - Stream data format validation
+   - Request format verification
+
+4. **UI Components**
+   - Dropdown value parsing
+   - Format preview generation
+   - Scan mode conversion (p/i)
+
 ## Test Framework
 
 Uses a custom lightweight test framework with:
@@ -49,9 +80,10 @@ Uses a custom lightweight test framework with:
 ## Expected Results
 
 All tests should pass:
-- ✅ 15+ tests
+- ✅ Genlock tests: 15+ tests
+- ✅ Resolution/framerate tests: 14+ tests
 - ✅ 100% pass rate
-- ✅ < 1 second execution time
+- ✅ < 1 second execution time per suite
 
 ## Manual Testing
 
