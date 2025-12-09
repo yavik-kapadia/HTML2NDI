@@ -72,12 +72,38 @@ brew install jq bc
 
 ## Running Tests
 
-### Quick Test
+### CI/CD Tests (Lightweight)
+
+For continuous integration environments:
+
+```bash
+cd /Users/yavik/HTML2NDI
+./tests/integration/test_ci.sh
+```
+
+This runs:
+- Worker startup validation
+- HTTP API endpoint tests
+- Configuration validation
+- **No NDI network required**
+
+### Full Integration Tests (Requires NDI)
+
+For local testing with NDI validation:
 
 ```bash
 cd /Users/yavik/HTML2NDI
 ./tests/integration/test_ndi_output.sh
+# or
+./tests/integration/test_ndi_output.py
 ```
+
+This runs:
+- All CI tests above
+- NDI stream capture with ffmpeg
+- Resolution/framerate validation
+- Progressive/interlaced detection
+- **Requires NDI SDK and ffmpeg with NDI support**
 
 ### Test Output
 

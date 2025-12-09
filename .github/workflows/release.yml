@@ -89,6 +89,13 @@ jobs:
       run: |
         cd build
         ctest --output-on-failure --timeout 60
+    
+    - name: Install jq for integration tests
+      run: brew install jq
+    
+    - name: Run CI integration tests
+      run: |
+        ./tests/integration/test_ci.sh
 
     # Cache Swift build
     - name: Cache Swift packages

@@ -92,4 +92,35 @@ jobs:
     # Note: Swift tests require Xcode project for menu bar apps
     # SPM doesn't support XCTest with SwiftUI/AppKit apps properly
     # Use xcodebuild test with an Xcode project for full Swift test coverage
+    
+    - name: Install jq for JSON parsing
+      run: brew install jq
+    
+    - name: Validate integration test scripts
+      run: |
+        # Check bash syntax
+        bash -n tests/integration/test_ndi_output.sh
+        bash -n tests/integration/test_ci.sh
+        # Check python syntax
+        python3 -m py_compile tests/integration/test_ndi_output.py
+        echo "✓ Integration test scripts validated"
+    
+    - name: Run CI integration tests
+      run: |
+        # Run CI-specific tests that validate:
+        # - Worker startup
+        # - HTTP API endpoints
+        # - Configuration validation
+        # Does NOT require NDI network discovery or ffmpeg
+        ./tests/integration/test_ci.sh
+    
+    - name: Upload test artifacts
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: test-logs
+        path: |
+          /tmp/html2ndi-worker-*.log
+          build/Testing/Temporary/LastTest.log
+        retention-days: 7
 
