@@ -123,7 +123,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             self?.networkChecker.checkNDIAccess { hasAccess in
                 DispatchQueue.main.async {
                     if !hasAccess {
-                        logWarn("NDI port (5960) not accessible - check firewall settings")
+                        logWarning("NDI port (5960) not accessible - check firewall settings")
                     }
                 }
             }
