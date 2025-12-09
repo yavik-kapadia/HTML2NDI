@@ -121,8 +121,8 @@ echo ""
 echo "Cleaning up..."
 kill $WORKER_PID 2>/dev/null || true
 wait $WORKER_PID 2>/dev/null || true
-rm -rf "/tmp/ci-test-$$"
-rm -f "/tmp/ci-worker-$$.log"
+rm -rf "/tmp/ci-test-$$" 2>/dev/null || true
+rm -f "/tmp/ci-worker-$$.log" 2>/dev/null || true
 
 # Summary
 echo ""
