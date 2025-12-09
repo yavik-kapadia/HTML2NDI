@@ -327,6 +327,53 @@ struct StreamDetailView: View {
                         }
                         .padding(.vertical, 8)
                         
+                        Divider()
+                        
+                        // Genlock Configuration
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("Genlock Synchronization")
+                                .font(.headline)
+                            
+                            Picker("Mode", selection: Binding(
+                                get: { stream.config.genlockMode },
+                                set: { newMode in
+                                    stream.config.genlockMode = newMode
+                                    if stream.isRunning {
+                                        applyGenlockChange(stream: stream, mode: newMode, address: stream.config.genlockMasterAddr)
+                                    }
+                                }
+                            )) {
+                                Text("Disabled").tag("disabled")
+                                Text("Master").tag("master")
+                                Text("Slave").tag("slave")
+                            }
+                            .pickerStyle(.segmented)
+                            
+                            if stream.config.genlockMode == "slave" {
+                                LabeledTextField(
+                                    label: "Master Address",
+                                    text: Binding(
+                                        get: { stream.config.genlockMasterAddr },
+                                        set: { newAddr in
+                                            stream.config.genlockMasterAddr = newAddr
+                                            if stream.isRunning {
+                                                applyGenlockChange(stream: stream, mode: stream.config.genlockMode, address: newAddr)
+                                            }
+                                        }
+                                    )
+                                )
+                            }
+                            
+                            Text(genlockDescription(for: stream.config.genlockMode))
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 8)
+                                .background(Color.accentColor.opacity(0.1))
+                                .cornerRadius(8)
+                        }
+                        .padding(.vertical, 8)
+                        
                         Button(action: saveChanges) {
                             Label("Save Changes", systemImage: "checkmark.circle.fill")
                         }
@@ -391,6 +438,45 @@ struct StreamDetailView: View {
             return "\(hours)h \(minutes)m"
         } else {
             return "\(minutes)m"
+        }
+    }
+    
+    private func applyGenlockChange(stream: StreamInstance, mode: String, address: String) {
+        guard stream.isRunning, stream.httpPort > 0 else { return }
+        
+        var body: [String: Any] = ["mode": mode]
+        if mode == "slave" && !address.isEmpty {
+            body["master_address"] = address
+        }
+        
+        guard let jsonData = try? JSONSerialization.data(withJSONObject: body),
+              let url = URL(string: "http://localhost:\(stream.httpPort)/genlock") else {
+            return
+        }
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.httpBody = jsonData
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        
+        URLSession.shared.dataTask(with: request) { data, response, error in
+            if let error = error {
+                logError("Genlock update failed: \(error.localizedDescription)")
+            } else {
+                logInfo("Genlock updated to \(mode)")
+                StreamManager.shared.saveStreams()
+            }
+        }.resume()
+    }
+    
+    private func genlockDescription(for mode: String) -> String {
+        switch mode {
+        case "master":
+            return "⏱ This stream provides timing for all slave streams"
+        case "slave":
+            return "🔗 Syncs frame timing with the master stream"
+        default:
+            return "⏸ Independent frame timing (no synchronization)"
         }
     }
 }
@@ -478,6 +564,8 @@ struct AddStreamView: View {
     @State private var height = 1080
     @State private var fps = 60
     @State private var autoStart = false
+    @State private var genlockMode = "disabled"
+    @State private var genlockMasterAddr = "127.0.0.1:5960"
     
     var body: some View {
         VStack(spacing: 0) {
@@ -535,6 +623,18 @@ struct AddStreamView: View {
                     }
                 }
                 
+                Section("Genlock Synchronization") {
+                    Picker("Mode", selection: $genlockMode) {
+                        Text("Disabled").tag("disabled")
+                        Text("Master").tag("master")
+                        Text("Slave").tag("slave")
+                    }
+                    
+                    if genlockMode == "slave" {
+                        TextField("Master Address", text: $genlockMasterAddr, prompt: Text("127.0.0.1:5960"))
+                    }
+                }
+                
                 Section {
                     Toggle("Auto-start on launch", isOn: $autoStart)
                 }
@@ -573,9 +673,21 @@ struct AddStreamView: View {
         config.height = height
         config.fps = fps
         config.autoStart = autoStart
+        config.genlockMode = genlockMode
+        config.genlockMasterAddr = genlockMasterAddr
         
         StreamManager.shared.addStream(config)
         dismiss()
     }
 }
+
+// MARK: - Previews
+
+#if DEBUG
+struct DashboardView_Previews: PreviewProvider {
+    static var previews: some View {
+        DashboardView()
+    }
+}
+#endif
 

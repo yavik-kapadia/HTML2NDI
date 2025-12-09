@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Genlock Dashboard UI Tests</title>
+    <style>
+        body {
+            font-family: -apple-system, system-ui, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #0a0a0f;
+            color: #e4e4e7;
+        }
+        h1 { color: #6366f1; }
+        .test { margin: 20px 0; padding: 15px; border-radius: 8px; background: #12121a; }
+        .test.pass { border-left: 4px solid #22c55e; }
+        .test.fail { border-left: 4px solid #ef4444; }
+        .test-name { font-weight: 600; margin-bottom: 10px; }
+        .test-result { font-family: monospace; font-size: 12px; color: #71717a; }
+        .summary { padding: 20px; background: #1a1a24; border-radius: 12px; margin: 20px 0; }
+        .summary .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; text-align: center; }
+        .summary .stat { padding: 15px; background: #12121a; border-radius: 8px; }
+        .summary .stat-value { font-size: 32px; font-weight: 700; }
+        .summary .stat-label { font-size: 12px; color: #71717a; text-transform: uppercase; }
+        .pass-count { color: #22c55e; }
+        .fail-count { color: #ef4444; }
+        button { 
+            padding: 10px 20px; 
+            background: #6366f1; 
+            border: none; 
+            border-radius: 8px; 
+            color: white; 
+            cursor: pointer;
+            font-weight: 600;
+        }
+        button:hover { background: #5558e3; }
+        .mock-api { background: #1a1a24; padding: 15px; border-radius: 8px; margin: 20px 0; }
+        .mock-api pre { background: #0a0a0f; padding: 10px; border-radius: 4px; overflow-x: auto; }
+    </style>
+</head>
+<body>
+    <h1>🧪 Genlock Dashboard UI Tests</h1>
+    
+    <div class="summary">
+        <h2>Test Summary</h2>
+        <div class="stats">
+            <div class="stat">
+                <div class="stat-value pass-count" id="pass-count">0</div>
+                <div class="stat-label">Passed</div>
+            </div>
+            <div class="stat">
+                <div class="stat-value fail-count" id="fail-count">0</div>
+                <div class="stat-label">Failed</div>
+            </div>
+            <div class="stat">
+                <div class="stat-value" id="total-count">0</div>
+                <div class="stat-label">Total</div>
+            </div>
+        </div>
+    </div>
+    
+    <button onclick="runAllTests()">Run All Tests</button>
+    
+    <div id="test-results"></div>
+    
+    <div class="mock-api">
+        <h3>Mock API Endpoints</h3>
+        <p>Tests use mocked HTTP responses to simulate the worker API</p>
+        <pre id="mock-status">Ready to run tests...</pre>
+    </div>
+
+    <script>
+        // Test Framework
+        class TestRunner {
+            constructor() {
+                this.tests = [];
+                this.results = [];
+                this.mockServer = new MockGenlockAPI();
+            }
+            
+            test(name, fn) {
+                this.tests.push({ name, fn });
+            }
+            
+            async runAll() {
+                this.results = [];
+                document.getElementById('test-results').innerHTML = '';
+                
+                for (const test of this.tests) {
+                    try {
+                        await test.fn(this.mockServer);
+                        this.addResult(test.name, true, 'Passed');
+                    } catch (error) {
+                        this.addResult(test.name, false, error.message);
+                    }
+                }
+                
+                this.updateSummary();
+            }
+            
+            addResult(name, pass, message) {
+                this.results.push({ name, pass, message });
+                
+                const div = document.createElement('div');
+                div.className = `test ${pass ? 'pass' : 'fail'}`;
+                div.innerHTML = `
+                    <div class="test-name">${pass ? '✅' : '❌'} ${name}</div>
+                    <div class="test-result">${message}</div>
+                `;
+                document.getElementById('test-results').appendChild(div);
+            }
+            
+            updateSummary() {
+                const passed = this.results.filter(r => r.pass).length;
+                const failed = this.results.filter(r => !r.pass).length;
+                
+                document.getElementById('pass-count').textContent = passed;
+                document.getElementById('fail-count').textContent = failed;
+                document.getElementById('total-count').textContent = this.results.length;
+            }
+        }
+        
+        // Mock Genlock API
+        class MockGenlockAPI {
+            constructor() {
+                this.currentMode = 'disabled';
+                this.masterAddress = '127.0.0.1:5960';
+                this.synchronized = false;
+                this.offset_us = 0;
+                this.jitter_us = 0;
+            }
+            
+            async getStatus() {
+                return {
+                    genlock: {
+                        mode: this.currentMode,
+                        synchronized: this.synchronized,
+                        offset_us: this.offset_us,
+                        stats: {
+                            jitter_us: this.jitter_us,
+                            packets_sent: 1000,
+                            packets_received: 998
+                        }
+                    }
+                };
+            }
+            
+            async postGenlock(mode, masterAddress) {
+                if (!['disabled', 'master', 'slave'].includes(mode)) {
+                    throw new Error('Invalid mode');
+                }
+                
+                this.currentMode = mode;
+                
+                if (mode === 'slave' && masterAddress) {
+                    this.masterAddress = masterAddress;
+                    this.synchronized = true;
+                    this.offset_us = Math.floor(Math.random() * 2000) - 1000;
+                    this.jitter_us = Math.random() * 500;
+                } else if (mode === 'master') {
+                    this.synchronized = true;
+                    this.offset_us = 0;
+                    this.jitter_us = 0;
+                } else {
+                    this.synchronized = false;
+                    this.offset_us = 0;
+                    this.jitter_us = 0;
+                }
+                
+                document.getElementById('mock-status').textContent = 
+                    `Mode: ${mode}\nMaster: ${masterAddress || 'N/A'}\nSynced: ${this.synchronized}`;
+                
+                return {
+                    success: true,
+                    mode: this.currentMode,
+                    synchronized: this.synchronized
+                };
+            }
+        }
+        
+        // Utility Functions
+        function assert(condition, message) {
+            if (!condition) {
+                throw new Error(message || 'Assertion failed');
+            }
+        }
+        
+        function assertEqual(actual, expected, message) {
+            if (actual !== expected) {
+                throw new Error(`${message || 'Values not equal'}: expected ${expected}, got ${actual}`);
+            }
+        }
+        
+        function assertContains(str, substring, message) {
+            if (!str.includes(substring)) {
+                throw new Error(`${message || 'String does not contain'}: "${substring}" not in "${str}"`);
+            }
+        }
+        
+        // Initialize Test Suite
+        const runner = new TestRunner();
+        
+        // Test: Default State
+        runner.test('Genlock should start in disabled mode', async (api) => {
+            const status = await api.getStatus();
+            assertEqual(status.genlock.mode, 'disabled', 'Initial mode');
+            assertEqual(status.genlock.synchronized, false, 'Should not be synchronized');
+        });
+        
+        // Test: Enable Master Mode
+        runner.test('Should switch to master mode', async (api) => {
+            const result = await api.postGenlock('master');
+            assertEqual(result.success, true, 'Request should succeed');
+            assertEqual(result.mode, 'master', 'Mode should be master');
+            
+            const status = await api.getStatus();
+            assertEqual(status.genlock.mode, 'master', 'Status should reflect master mode');
+            assertEqual(status.genlock.synchronized, true, 'Master should be synchronized');
+            assertEqual(status.genlock.offset_us, 0, 'Master should have 0 offset');
+        });
+        
+        // Test: Enable Slave Mode
+        runner.test('Should switch to slave mode', async (api) => {
+            const result = await api.postGenlock('slave', '192.168.100.10:5960');
+            assertEqual(result.success, true, 'Request should succeed');
+            assertEqual(result.mode, 'slave', 'Mode should be slave');
+            
+            const status = await api.getStatus();
+            assertEqual(status.genlock.mode, 'slave', 'Status should reflect slave mode');
+            assertEqual(status.genlock.synchronized, true, 'Slave should be synchronized');
+        });
+        
+        // Test: Invalid Mode
+        runner.test('Should reject invalid mode', async (api) => {
+            try {
+                await api.postGenlock('invalid');
+                throw new Error('Should have thrown error');
+            } catch (error) {
+                assertContains(error.message, 'Invalid mode', 'Error message');
+            }
+        });
+        
+        // Test: Master Address Format
+        runner.test('Should accept various master address formats', async (api) => {
+            const addresses = [
+                '127.0.0.1:5960',
+                '192.168.1.100:5960',
+                '10.0.0.1:6000',
+                'localhost:5960'
+            ];
+            
+            for (const addr of addresses) {
+                const result = await api.postGenlock('slave', addr);
+                assertEqual(result.success, true, `Should accept ${addr}`);
+            }
+        });
+        
+        // Test: Mode Transitions
+        runner.test('Should handle all mode transitions', async (api) => {
+            // disabled -> master
+            await api.postGenlock('master');
+            let status = await api.getStatus();
+            assertEqual(status.genlock.mode, 'master');
+            
+            // master -> slave
+            await api.postGenlock('slave', '127.0.0.1:5960');
+            status = await api.getStatus();
+            assertEqual(status.genlock.mode, 'slave');
+            
+            // slave -> disabled
+            await api.postGenlock('disabled');
+            status = await api.getStatus();
+            assertEqual(status.genlock.mode, 'disabled');
+            assertEqual(status.genlock.synchronized, false);
+        });
+        
+        // Test: Sync Metrics
+        runner.test('Should track sync metrics for slave', async (api) => {
+            await api.postGenlock('slave', '192.168.100.10:5960');
+            const status = await api.getStatus();
+            
+            assert(status.genlock.synchronized, 'Should be synchronized');
+            assert(typeof status.genlock.offset_us === 'number', 'Offset should be number');
+            assert(typeof status.genlock.stats.jitter_us === 'number', 'Jitter should be number');
+            assert(status.genlock.stats.packets_sent > 0, 'Should have sent packets');
+            assert(status.genlock.stats.packets_received > 0, 'Should have received packets');
+        });
+        
+        // Test: UI State Updates
+        runner.test('UI should update mode selector on status change', async (api) => {
+            await api.postGenlock('master');
+            
+            // Simulate UI update
+            const mockSelect = { value: 'disabled' };
+            mockSelect.value = api.currentMode;
+            
+            assertEqual(mockSelect.value, 'master', 'UI select should update');
+        });
+        
+        // Test: Master Address Visibility
+        runner.test('Master address field should show for slave mode only', async (api) => {
+            await api.postGenlock('disabled');
+            let showMasterField = api.currentMode === 'slave';
+            assertEqual(showMasterField, false, 'Should hide for disabled');
+            
+            await api.postGenlock('master');
+            showMasterField = api.currentMode === 'slave';
+            assertEqual(showMasterField, false, 'Should hide for master');
+            
+            await api.postGenlock('slave', '127.0.0.1:5960');
+            showMasterField = api.currentMode === 'slave';
+            assertEqual(showMasterField, true, 'Should show for slave');
+        });
+        
+        // Test: Offset Color Coding
+        runner.test('Should color-code offset based on value', async (api) => {
+            await api.postGenlock('slave', '127.0.0.1:5960');
+            
+            // Simulate different offsets
+            const testCases = [
+                { offset: 500, expected: 'green' },    // < 1000μs
+                { offset: 3000, expected: 'yellow' },  // 1000-5000μs
+                { offset: 10000, expected: 'red' }     // > 5000μs
+            ];
+            
+            for (const tc of testCases) {
+                api.offset_us = tc.offset;
+                const absOffset = Math.abs(tc.offset);
+                let color;
+                if (absOffset < 1000) color = 'green';
+                else if (absOffset < 5000) color = 'yellow';
+                else color = 'red';
+                
+                assertEqual(color, tc.expected, `Offset ${tc.offset}μs should be ${tc.expected}`);
+            }
+        });
+        
+        // Test: Jitter Thresholds
+        runner.test('Should color-code jitter based on thresholds', async (api) => {
+            const testCases = [
+                { jitter: 300, expected: 'green' },    // < 500μs
+                { jitter: 750, expected: 'yellow' },   // 500-1000μs
+                { jitter: 1500, expected: 'red' }      // > 1000μs
+            ];
+            
+            for (const tc of testCases) {
+                api.jitter_us = tc.jitter;
+                let color;
+                if (tc.jitter < 500) color = 'green';
+                else if (tc.jitter < 1000) color = 'yellow';
+                else color = 'red';
+                
+                assertEqual(color, tc.expected, `Jitter ${tc.jitter}μs should be ${tc.expected}`);
+            }
+        });
+        
+        // Test: API Error Handling
+        runner.test('Should handle API errors gracefully', async (api) => {
+            // Simulate API error
+            const originalPost = api.postGenlock;
+            api.postGenlock = async () => {
+                throw new Error('Network error');
+            };
+            
+            try {
+                await api.postGenlock('master');
+                throw new Error('Should have thrown error');
+            } catch (error) {
+                assertContains(error.message, 'Network error', 'Should propagate error');
+            } finally {
+                api.postGenlock = originalPost;
+            }
+        });
+        
+        // Test: Default Port
+        runner.test('Should use default port 5960', async (api) => {
+            assertEqual(api.masterAddress, '127.0.0.1:5960', 'Default address should include port 5960');
+        });
+        
+        // Run all tests
+        async function runAllTests() {
+            await runner.runAll();
+        }
+        
+        // Auto-run tests on load
+        window.addEventListener('load', () => {
+            runAllTests();
+        });
+    </script>
+</body>
+</html>
+
