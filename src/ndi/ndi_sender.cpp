@@ -79,7 +79,8 @@ void NdiSender::send_video_frame(
     int width,
     int height,
     int frame_rate_n,
-    int frame_rate_d) {
+    int frame_rate_d,
+    bool progressive) {
     
     if (!initialized_ || !sender_) {
         return;
@@ -94,7 +95,9 @@ void NdiSender::send_video_frame(
     video_frame_.frame_rate_N = frame_rate_n;
     video_frame_.frame_rate_D = frame_rate_d;
     video_frame_.picture_aspect_ratio = static_cast<float>(width) / static_cast<float>(height);
-    video_frame_.frame_format_type = NDIlib_frame_format_type_progressive;
+    video_frame_.frame_format_type = progressive 
+        ? NDIlib_frame_format_type_progressive 
+        : NDIlib_frame_format_type_interleaved_NTSC;
 
 
 

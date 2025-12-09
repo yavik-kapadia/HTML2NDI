@@ -157,6 +157,7 @@ class ManagerServer {
                 "width": stream.config.width,
                 "height": stream.config.height,
                 "fps": stream.config.fps,
+                "progressive": stream.config.progressive,
                 "colorPreset": stream.config.colorPreset,
                 "autoStart": stream.config.autoStart,
                 "isRunning": stream.isRunning,
@@ -210,6 +211,7 @@ class ManagerServer {
         config.width = json["width"] as? Int ?? 1920
         config.height = json["height"] as? Int ?? 1080
         config.fps = json["fps"] as? Int ?? 60
+        config.progressive = json["progressive"] as? Bool ?? true
         config.colorPreset = json["colorPreset"] as? String ?? "rec709"
         config.autoStart = json["autoStart"] as? Bool ?? false
         
@@ -470,10 +472,40 @@ class ManagerServer {
                     <div class="form-g"><label>Source URL (optional - blank shows test card)</label><input id="newUrl" placeholder="Leave blank for test card"></div>
                     <div class="form-g"><label>NDI Source Name</label><input id="newNdi" placeholder="Graphics"></div>
                     <div class="form-g"><label>NDI Access Group</label><input id="newGroups" value="public" placeholder="public" title="Comma-separated groups. Use 'public' for all receivers."></div>
+                    <div class="form-g">
+                        <label>Resolution</label>
+                        <select id="newRes">
+                            <option value="3840x2160">4K UHD (3840×2160)</option>
+                            <option value="2560x1440">QHD (2560×1440)</option>
+                            <option value="1920x1080" selected>1080p (1920×1080)</option>
+                            <option value="1280x720">720p (1280×720)</option>
+                            <option value="1024x768">XGA (1024×768)</option>
+                            <option value="854x480">FWVGA (854×480)</option>
+                            <option value="640x480">SD (640×480)</option>
+                        </select>
+                    </div>
                     <div class="form-row">
-                        <div class="form-g"><label>Width</label><input id="newW" type="number" value="1920"></div>
-                        <div class="form-g"><label>Height</label><input id="newH" type="number" value="1080"></div>
-                        <div class="form-g"><label>FPS</label><input id="newFps" type="number" value="60"></div>
+                        <div class="form-g">
+                            <label>Scan Mode</label>
+                            <select id="newScan">
+                                <option value="p" selected>Progressive (p)</option>
+                                <option value="i">Interlaced (i)</option>
+                            </select>
+                        </div>
+                        <div class="form-g">
+                            <label>Frame Rate</label>
+                            <select id="newFps">
+                                <option value="24">24 fps</option>
+                                <option value="25">25 fps</option>
+                                <option value="30">30 fps</option>
+                                <option value="50">50 fps</option>
+                                <option value="60" selected>60 fps</option>
+                            </select>
+                        </div>
+                        <div class="form-g">
+                            <label>Format</label>
+                            <div style="padding:.6rem;background:var(--input);border:1px solid var(--border);border-radius:8px;font-family:ui-monospace,monospace;font-size:.85rem;color:var(--accent)" id="formatPreview">1080p60</div>
+                        </div>
                     </div>
                     <div class="form-g"><label>Color Preset</label><select id="newColor"><option value="rec709">Rec. 709</option><option value="rec2020">Rec. 2020</option><option value="srgb">sRGB</option><option value="rec601">Rec. 601</option></select></div>
                     <div class="form-g"><label><input type="checkbox" id="newAuto"> Auto-start on launch</label></div>
@@ -561,7 +593,7 @@ class ManagerServer {
                                 ${s.onProgram ? '<span class="tally pgm">PGM</span>' : ''}
                                 ${s.onPreview ? '<span class="tally pvw">PVW</span>' : ''}
                             </div>
-                            <span style="color:var(--dim);font-size:.85rem">${s.width}x${s.height} @ ${s.fps}fps</span>
+                            <span style="color:var(--dim);font-size:.85rem">${s.width}×${s.height}${s.progressive ? 'p' : 'i'}${s.fps}</span>
                         </div>
                         ${s.hasError && !s.isRunning ? `<div class="error-box">${escapeHtml(s.lastError)}${s.crashCount > 0 ? ' (crashes: '+s.crashCount+')' : ''}</div>` : ''}
                         ${s.isRunning && s.httpPort > 0 ? `
@@ -638,18 +670,33 @@ class ManagerServer {
             
             function openControl(port) { if(port>0) window.open('http://localhost:'+port,'_blank'); else toast('Stream not running'); }
             
-            function showAddModal() { document.getElementById('addModal').classList.add('show'); }
+            function showAddModal() { 
+                document.getElementById('addModal').classList.add('show'); 
+                updateFormatPreview();
+            }
             function hideAddModal() { document.getElementById('addModal').classList.remove('show'); }
             
+            function updateFormatPreview() {
+                const res = document.getElementById('newRes').value;
+                const scan = document.getElementById('newScan').value;
+                const fps = document.getElementById('newFps').value;
+                const [w, h] = res.split('x');
+                const formatName = h === '2160' ? '4K' : h === '1440' ? 'QHD' : h === '1080' ? '1080' : h === '720' ? '720' : h;
+                document.getElementById('formatPreview').textContent = `${formatName}${scan}${fps}`;
+            }
+            
             async function addStream() {
+                const res = document.getElementById('newRes').value;
+                const [width, height] = res.split('x').map(Number);
                 const data = {
                     name: document.getElementById('newName').value,
                     url: document.getElementById('newUrl').value || '',  // Empty = test card
                     ndiName: document.getElementById('newNdi').value,
                     ndiGroups: document.getElementById('newGroups').value || 'public',
-                    width: parseInt(document.getElementById('newW').value) || 1920,
-                    height: parseInt(document.getElementById('newH').value) || 1080,
+                    width: width,
+                    height: height,
                     fps: parseInt(document.getElementById('newFps').value) || 60,
+                    progressive: document.getElementById('newScan').value === 'p',
                     colorPreset: document.getElementById('newColor').value,
                     autoStart: document.getElementById('newAuto').checked
                 };
@@ -681,6 +728,11 @@ class ManagerServer {
                     }
                 });
             }
+            
+            // Add event listeners for format preview
+            document.getElementById('newRes').addEventListener('change', updateFormatPreview);
+            document.getElementById('newScan').addEventListener('change', updateFormatPreview);
+            document.getElementById('newFps').addEventListener('change', updateFormatPreview);
             
             load();
             setInterval(load, 2000);

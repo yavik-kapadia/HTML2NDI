@@ -16,6 +16,7 @@ struct Config {
     uint32_t width = 1920;
     uint32_t height = 1080;
     uint32_t fps = 60;
+    bool progressive = true;  // true = progressive (p), false = interlaced (i)
     
     // NDI settings
     std::string ndi_name = "HTML2NDI";

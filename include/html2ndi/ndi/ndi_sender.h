@@ -72,13 +72,15 @@ public:
      * @param height Frame height
      * @param frame_rate_n Framerate numerator
      * @param frame_rate_d Framerate denominator
+     * @param progressive true for progressive, false for interlaced
      */
     void send_video_frame(
         const uint8_t* data,
         int width,
         int height,
         int frame_rate_n,
-        int frame_rate_d);
+        int frame_rate_d,
+        bool progressive = true);
     
     /**
      * Send an audio frame.
@@ -150,7 +152,7 @@ public:
     std::string color_space_name() const;
     std::string gamma_mode_name() const;
     std::string color_range_name() const;
-    
+
     /**
      * Set explicit timecode for next frame.
      * @param timecode NDI timecode in 100ns units (or NDIlib_send_timecode_synthesize)

@@ -44,6 +44,7 @@ void Config::print_help(const char* program_name) {
     print_arg("-w", "--width", "<pixels>", "Frame width (default: 1920)");
     print_arg("-h", "--height", "<pixels>", "Frame height (default: 1080)");
     print_arg("-f", "--fps", "<rate>", "Target framerate (default: 60)");
+    print_arg("-i", "--interlaced", nullptr, "Use interlaced mode (default: progressive)");
     
     std::cout << std::endl;
     std::cout << "NDI Options:" << std::endl;
@@ -144,6 +145,9 @@ std::optional<Config> Config::parse(int argc, char* argv[]) {
             int val = get_int();
             if (val <= 0) return std::nullopt;
             config.fps = static_cast<uint32_t>(val);
+        }
+        else if (arg == "-i" || arg == "--interlaced") {
+            config.progressive = false;
         }
         
         // NDI options

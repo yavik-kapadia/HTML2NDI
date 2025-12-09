@@ -25,9 +25,10 @@ public:
      * Create a frame pump.
      * @param sender NDI sender to deliver frames to
      * @param target_fps Target framerate
+     * @param progressive true for progressive, false for interlaced
      * @param genlock_clock Optional genlock clock for synchronization
      */
-    FramePump(NdiSender* sender, int target_fps, std::shared_ptr<GenlockClock> genlock_clock = nullptr);
+    FramePump(NdiSender* sender, int target_fps, bool progressive = true, std::shared_ptr<GenlockClock> genlock_clock = nullptr);
     ~FramePump();
     
     // Non-copyable, non-movable
@@ -120,6 +121,7 @@ private:
     std::shared_ptr<GenlockClock> genlock_clock_;
     
     std::atomic<int> target_fps_;
+    std::atomic<bool> progressive_;
     std::chrono::nanoseconds frame_duration_;
     
     // Double buffering

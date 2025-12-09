@@ -60,8 +60,8 @@ bool Application::initialize() {
     }
     
     // Create frame pump with genlock
-    LOG_DEBUG("Creating frame pump at %d fps", config_.fps);
-    frame_pump_ = std::make_unique<FramePump>(ndi_sender_.get(), config_.fps, genlock_clock_);
+    LOG_DEBUG("Creating frame pump at %d fps (%s)", config_.fps, config_.progressive ? "progressive" : "interlaced");
+    frame_pump_ = std::make_unique<FramePump>(ndi_sender_.get(), config_.fps, config_.progressive, genlock_clock_);
     
     // Create CEF renderer with frame callback
     LOG_DEBUG("Creating CEF renderer %dx%d", config_.width, config_.height);

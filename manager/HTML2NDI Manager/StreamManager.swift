@@ -10,6 +10,7 @@ struct StreamConfig: Codable, Identifiable {
     var width: Int
     var height: Int
     var fps: Int
+    var progressive: Bool  // true = progressive (p), false = interlaced (i)
     var colorPreset: String
     var httpPort: Int
     var autoStart: Bool
@@ -27,6 +28,7 @@ struct StreamConfig: Codable, Identifiable {
         self.width = 1920
         self.height = 1080
         self.fps = 60
+        self.progressive = true  // Default to progressive
         self.colorPreset = "rec709"
         self.httpPort = 0 // Auto-assign
         self.autoStart = false

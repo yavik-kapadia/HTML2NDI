@@ -301,18 +301,30 @@ struct StreamDetailView: View {
                         
                         HStack(spacing: 12) {
                             VStack(alignment: .leading, spacing: 4) {
-                                Text("Resolution")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                                Text("\(stream.config.width) × \(stream.config.height)")
+                                HStack(spacing: 4) {
+                                    Text("Resolution")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                    Image(systemName: "info.circle")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                        .help("Resolution is set at stream creation and cannot be changed at runtime. Delete and recreate the stream to use a different resolution.")
+                                }
+                                Text("\(stream.config.width) × \(stream.config.height)\(stream.config.progressive ? "p" : "i")")
                             }
                             
                             Spacer()
                             
                             VStack(alignment: .leading, spacing: 4) {
-                                Text("Frame Rate")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
+                                HStack(spacing: 4) {
+                                    Text("Frame Rate")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                    Image(systemName: "info.circle")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                        .help("Frame rate is set at stream creation and cannot be changed at runtime. Delete and recreate the stream to use a different frame rate.")
+                                }
                                 Text("\(stream.config.fps) fps")
                             }
                             
@@ -555,17 +567,44 @@ struct LabeledTextField: View {
     }
 }
 
+// MARK: - Standard Video Formats
+
+struct VideoFormat: Identifiable {
+    let id = UUID()
+    let width: Int
+    let height: Int
+    let name: String
+    
+    var displayName: String { "\(name) (\(width)×\(height))" }
+}
+
+let standardFormats: [VideoFormat] = [
+    VideoFormat(width: 3840, height: 2160, name: "4K UHD"),
+    VideoFormat(width: 2560, height: 1440, name: "QHD"),
+    VideoFormat(width: 1920, height: 1080, name: "1080p"),
+    VideoFormat(width: 1280, height: 720, name: "720p"),
+    VideoFormat(width: 1024, height: 768, name: "XGA"),
+    VideoFormat(width: 854, height: 480, name: "FWVGA"),
+    VideoFormat(width: 640, height: 480, name: "SD")
+]
+
+let standardFramerates = [24, 25, 30, 50, 60]
+
 struct AddStreamView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var name = ""
     @State private var url = ""
     @State private var ndiName = ""
-    @State private var width = 1920
-    @State private var height = 1080
+    @State private var selectedFormat = standardFormats[2] // Default: 1080p
     @State private var fps = 60
+    @State private var progressive = true
     @State private var autoStart = false
     @State private var genlockMode = "disabled"
     @State private var genlockMasterAddr = "127.0.0.1:5960"
+    
+    var formatDescription: String {
+        "\(selectedFormat.name)\(progressive ? "p" : "i")\(fps)"
+    }
     
     var body: some View {
         VStack(spacing: 0) {
@@ -597,30 +636,35 @@ struct AddStreamView: View {
                 }
                 
                 Section("Video Settings") {
-                    HStack {
-                        Text("Width")
-                        Spacer()
-                        TextField("Width", value: $width, format: .number)
-                            .frame(width: 100)
-                            .multilineTextAlignment(.trailing)
+                    Picker("Resolution", selection: $selectedFormat) {
+                        ForEach(standardFormats) { format in
+                            Text(format.displayName).tag(format)
+                        }
+                    }
+                    
+                    Picker("Scan Mode", selection: $progressive) {
+                        Text("Progressive (p)").tag(true)
+                        Text("Interlaced (i)").tag(false)
+                    }
+                    .pickerStyle(.segmented)
+                    
+                    Picker("Frame Rate", selection: $fps) {
+                        ForEach(standardFramerates, id: \.self) { rate in
+                            Text("\(rate) fps").tag(rate)
+                        }
                     }
                     
                     HStack {
-                        Text("Height")
+                        Text("Format")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
                         Spacer()
-                        TextField("Height", value: $height, format: .number)
-                            .frame(width: 100)
-                            .multilineTextAlignment(.trailing)
+                        Text(formatDescription)
+                            .font(.system(.body, design: .monospaced))
+                            .fontWeight(.semibold)
+                            .foregroundColor(.accentColor)
                     }
-                    
-                    HStack {
-                        Text("Frame Rate")
-                        Spacer()
-                        TextField("FPS", value: $fps, format: .number)
-                            .frame(width: 100)
-                            .multilineTextAlignment(.trailing)
-                        Text("fps")
-                    }
+                    .padding(.vertical, 4)
                 }
                 
                 Section("Genlock Synchronization") {
@@ -669,9 +713,10 @@ struct AddStreamView: View {
             url: url,
             ndiName: ndiName
         )
-        config.width = width
-        config.height = height
+        config.width = selectedFormat.width
+        config.height = selectedFormat.height
         config.fps = fps
+        config.progressive = progressive
         config.autoStart = autoStart
         config.genlockMode = genlockMode
         config.genlockMasterAddr = genlockMasterAddr

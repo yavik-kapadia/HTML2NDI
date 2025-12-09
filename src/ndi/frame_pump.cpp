@@ -11,9 +11,10 @@
 
 namespace html2ndi {
 
-FramePump::FramePump(NdiSender* sender, int target_fps, std::shared_ptr<GenlockClock> genlock_clock)
+FramePump::FramePump(NdiSender* sender, int target_fps, bool progressive, std::shared_ptr<GenlockClock> genlock_clock)
     : sender_(sender)
     , target_fps_(target_fps)
+    , progressive_(progressive)
     , genlock_clock_(genlock_clock) {
     
     // Calculate frame duration
@@ -169,7 +170,8 @@ void FramePump::pump_thread() {
                     buffer.width,
                     buffer.height,
                     fps,
-                    1
+                    1,
+                    progressive_
                 );
                 
                 // Restore timecode mode
