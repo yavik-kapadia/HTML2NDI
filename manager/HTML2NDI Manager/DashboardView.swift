@@ -569,11 +569,23 @@ struct LabeledTextField: View {
 
 // MARK: - Standard Video Formats
 
-struct VideoFormat: Identifiable {
+struct VideoFormat: Identifiable, Hashable {
     let id = UUID()
     let width: Int
     let height: Int
     let name: String
+    
+    // Hash based on content, not UUID
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(width)
+        hasher.combine(height)
+        hasher.combine(name)
+    }
+    
+    // Compare based on content, not UUID
+    static func == (lhs: VideoFormat, rhs: VideoFormat) -> Bool {
+        return lhs.width == rhs.width && lhs.height == rhs.height && lhs.name == rhs.name
+    }
     
     var displayName: String { "\(name) (\(width)×\(height))" }
 }
