@@ -2,6 +2,7 @@ import SwiftUI
 
 struct DashboardView: View {
     @ObservedObject private var manager = StreamManager.shared
+    @StateObject private var networkChecker = NetworkPermissionChecker()
     @State private var showingAddStream = false
     @State private var selectedStream: StreamInstance?
     @State private var searchText = ""
@@ -41,6 +42,30 @@ struct DashboardView: View {
                     TextField("Search streams...", text: $searchText)
                         .textFieldStyle(.roundedBorder)
                         .padding(.horizontal)
+                    
+                    // Network Permission Status
+                    if networkChecker.permissionStatus != .granted {
+                        HStack(spacing: 8) {
+                            Image(systemName: networkChecker.permissionStatus == .denied ? "exclamationmark.triangle.fill" : "network")
+                                .foregroundColor(networkChecker.statusColor)
+                            Text(networkChecker.statusMessage)
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            
+                            if networkChecker.permissionStatus == .denied {
+                                Button("Fix") {
+                                    networkChecker.openSystemSettings()
+                                }
+                                .buttonStyle(.bordered)
+                                .controlSize(.mini)
+                            }
+                        }
+                        .padding(.horizontal)
+                        .padding(.vertical, 6)
+                        .background(networkChecker.statusColor.opacity(0.1))
+                        .cornerRadius(6)
+                        .padding(.horizontal)
+                    }
                 }
                 .padding(.bottom, 8)
                 

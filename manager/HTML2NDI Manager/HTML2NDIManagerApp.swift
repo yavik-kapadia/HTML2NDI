@@ -26,8 +26,12 @@ struct HTML2NDIManagerApp: App {
 class AppDelegate: NSObject, NSApplicationDelegate {
     var statusItem: NSStatusItem?
     var streamManager = StreamManager.shared
+    var networkChecker = NetworkPermissionChecker()
     
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // Check network permissions first
+        checkNetworkPermissions()
+        
         // Show in dock (we have a window now!)
         NSApp.setActivationPolicy(.regular)
         
@@ -99,6 +103,56 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     
     @objc func stopAllStreams() {
         streamManager.stopAll()
+    }
+    
+    // MARK: - Network Permission Check
+    
+    private func checkNetworkPermissions() {
+        // Give the system a moment to initialize
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
+            guard let self = self else { return }
+            
+            if !self.networkChecker.hasNetworkPermission && 
+               self.networkChecker.permissionStatus == .denied {
+                self.showNetworkPermissionAlert()
+            }
+        }
+        
+        // Also check NDI-specific access
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) { [weak self] in
+            self?.networkChecker.checkNDIAccess { hasAccess in
+                DispatchQueue.main.async {
+                    if !hasAccess {
+                        logWarn("NDI port (5960) not accessible - check firewall settings")
+                    }
+                }
+            }
+        }
+    }
+    
+    private func showNetworkPermissionAlert() {
+        let alert = NSAlert()
+        alert.messageText = "Local Network Access Required"
+        alert.informativeText = """
+            HTML2NDI Manager needs local network access to:
+            • Communicate with worker processes
+            • Stream NDI video over your local network
+            • Discover NDI sources
+            
+            The app will not function properly without this permission.
+            
+            Would you like to open System Settings to enable it?
+            """
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "Open System Settings")
+        alert.addButton(withTitle: "Continue Anyway")
+        alert.icon = NSImage(systemSymbolName: "network.badge.shield.half.filled", 
+                           accessibilityDescription: "Network Permission")
+        
+        let response = alert.runModal()
+        if response == .alertFirstButtonReturn {
+            networkChecker.openSystemSettings()
+        }
     }
 }
 
