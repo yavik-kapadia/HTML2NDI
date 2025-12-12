@@ -174,6 +174,57 @@ jobs:
         echo "APP_DIR=$APP_DIR" >> $GITHUB_ENV
         echo "VERSION=$VERSION" >> $GITHUB_ENV
 
+    - name: Bundle Missing Dependencies
+      run: |
+        APP_DIR="${{ env.APP_DIR }}"
+        WORKER="$APP_DIR/Contents/Resources/html2ndi.app"
+        WORKER_BIN="$WORKER/Contents/MacOS/html2ndi"
+        FRAMEWORKS="$WORKER/Contents/Frameworks"
+        
+        echo "Checking dependencies for worker binary..."
+        
+        # Get all Homebrew dependencies
+        HOMEBREW_LIBS=$(otool -L "$WORKER_BIN" | grep '/opt/homebrew' | awk '{print $1}' || true)
+        
+        if [ -n "$HOMEBREW_LIBS" ]; then
+          echo "Found Homebrew dependencies that need bundling:"
+          echo "$HOMEBREW_LIBS"
+          
+          # Copy each missing library
+          for lib in $HOMEBREW_LIBS; do
+            if [ -f "$lib" ]; then
+              lib_name=$(basename "$lib")
+              echo "Bundling: $lib_name"
+              cp "$lib" "$FRAMEWORKS/$lib_name"
+              chmod 644 "$FRAMEWORKS/$lib_name"
+              
+              # Fix the reference in the main binary
+              install_name_tool -change "$lib" "@rpath/$lib_name" "$WORKER_BIN"
+            else
+              echo "Warning: Library not found: $lib"
+            fi
+          done
+          
+          # Also check CEF framework
+          CEF_BIN="$WORKER/Contents/Frameworks/Chromium Embedded Framework.framework/Chromium Embedded Framework"
+          if [ -f "$CEF_BIN" ]; then
+            CEF_HOMEBREW_LIBS=$(otool -L "$CEF_BIN" | grep '/opt/homebrew' | awk '{print $1}' || true)
+            for lib in $CEF_HOMEBREW_LIBS; do
+              if [ -f "$lib" ]; then
+                lib_name=$(basename "$lib")
+                echo "Bundling (for CEF): $lib_name"
+                cp "$lib" "$FRAMEWORKS/$lib_name"
+                chmod 644 "$FRAMEWORKS/$lib_name"
+                install_name_tool -change "$lib" "@rpath/$lib_name" "$CEF_BIN"
+              fi
+            done
+          fi
+          
+          echo "Dependency bundling complete"
+        else
+          echo "No Homebrew dependencies found - all good!"
+        fi
+
     - name: Code Sign Application
       env:
         APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
@@ -186,8 +237,13 @@ jobs:
         
         echo "Signing with: $IDENTITY"
         
-        # Sign NDI library
-        codesign --force --options runtime --timestamp --sign "$IDENTITY" --entitlements "$ENTITLEMENTS" "$WORKER/Contents/Frameworks/libndi.dylib"
+        # Sign any bundled Homebrew libraries first
+        for lib in "$WORKER/Contents/Frameworks/"*.dylib; do
+          if [ -f "$lib" ]; then
+            echo "Signing: $(basename "$lib")"
+            codesign --force --options runtime --timestamp --sign "$IDENTITY" --entitlements "$ENTITLEMENTS" "$lib" || true
+          fi
+        done
         
         # Sign CEF libraries
         codesign --force --options runtime --timestamp --sign "$IDENTITY" --entitlements "$ENTITLEMENTS" "$CEF/Libraries/libEGL.dylib"
