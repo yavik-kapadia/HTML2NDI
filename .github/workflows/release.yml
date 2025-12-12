@@ -200,6 +200,29 @@ jobs:
               
               # Fix the reference in the main binary
               install_name_tool -change "$lib" "@rpath/$lib_name" "$WORKER_BIN"
+              
+              # CRITICAL: Also check this library's dependencies (transitive)
+              LIB_DEPS=$(otool -L "$FRAMEWORKS/$lib_name" | grep '/opt/homebrew' | awk '{print $1}' || true)
+              for dep in $LIB_DEPS; do
+                dep_name=$(basename "$dep")
+                if [ -f "/opt/homebrew/opt/$(echo $dep | cut -d'/' -f4)/lib/$dep_name" ]; then
+                  dep_path="/opt/homebrew/opt/$(echo $dep | cut -d'/' -f4)/lib/$dep_name"
+                elif [ -f "$dep" ]; then
+                  dep_path="$dep"
+                else
+                  continue
+                fi
+                
+                # Bundle the dependency if not already present
+                if [ ! -f "$FRAMEWORKS/$dep_name" ]; then
+                  echo "  → Bundling transitive dependency: $dep_name"
+                  cp "$dep_path" "$FRAMEWORKS/$dep_name"
+                  chmod 644 "$FRAMEWORKS/$dep_name"
+                fi
+                
+                # Fix the reference in the bundled library
+                install_name_tool -change "$dep" "@rpath/$dep_name" "$FRAMEWORKS/$lib_name"
+              done
             else
               echo "Warning: Library not found: $lib"
             fi
