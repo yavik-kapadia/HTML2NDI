@@ -24,6 +24,21 @@ to devices on your local network.
 
 **✅ You must click "Allow"** for the app to work properly.
 
+### First Stream Launch (Important!)
+
+**When you start your first stream**, macOS will prompt **again** for the worker process:
+
+```
+"html2ndi" would like to find and connect
+to devices on your local network.
+```
+
+This is **normal behavior** because HTML2NDI uses two processes:
+1. **HTML2NDI Manager** - The menu bar app that manages streams
+2. **html2ndi** - The worker process that actually renders and sends NDI video
+
+**✅ Click "Allow" for both processes.** After the first stream, subsequent streams won't prompt again.
+
 ### If You Accidentally Denied Permission
 
 If you clicked "Don't Allow" or want to change the permission later:

@@ -51,10 +51,16 @@ struct DashboardView: View {
                                 .foregroundColor(networkChecker.statusColor)
                             
                             VStack(alignment: .leading, spacing: 2) {
-                                Text("Network Permissions")
-                                    .font(.caption)
-                                    .fontWeight(.medium)
-                                Text(networkChecker.permissionStatus == .granted ? "Local network access enabled" : networkChecker.statusMessage)
+                                HStack(spacing: 4) {
+                                    Text("Network Permissions")
+                                        .font(.caption)
+                                        .fontWeight(.medium)
+                                    Image(systemName: "info.circle")
+                                        .font(.caption2)
+                                        .foregroundColor(.secondary)
+                                        .help("First-run note: When you start a stream for the first time, macOS may prompt again for the worker process. This is normal - grant permission to both the Manager and worker processes.")
+                                }
+                                Text(networkChecker.permissionStatus == .granted ? "Manager has local network access" : networkChecker.statusMessage)
                                     .font(.caption2)
                                     .foregroundColor(.secondary)
                             }

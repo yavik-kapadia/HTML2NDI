@@ -33,66 +33,70 @@ class NetworkPermissionChecker: ObservableObject {
     func checkNetworkPermission() {
         permissionStatus = .checking
         
-        // Create a network path monitor
-        monitor = NWPathMonitor()
+        // Actually try to bind to the ports we'll use to test permission
+        DispatchQueue.global().async { [weak self] in
+            self?.testActualNetworkAccess()
+        }
+    }
+    
+    /// Test actual network access by binding to ports the app will use
+    private func testActualNetworkAccess() {
+        var hasPermission = false
         
-        monitor?.pathUpdateHandler = { [weak self] path in
-            DispatchQueue.main.async {
-                // If we can see the network path, we have permission
-                if path.status == .satisfied {
-                    self?.hasNetworkPermission = true
-                    self?.permissionStatus = .granted
-                } else if path.status == .unsatisfied {
-                    // Could be denied or no network
-                    self?.hasNetworkPermission = false
-                    self?.permissionStatus = .denied
+        // Test 1: Try to bind to port 8080 (web dashboard)
+        let socket1 = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)
+        if socket1 >= 0 {
+            var addr = sockaddr_in()
+            addr.sin_family = sa_family_t(AF_INET)
+            addr.sin_port = UInt16(8080).bigEndian
+            addr.sin_addr.s_addr = INADDR_ANY
+            
+            let bindResult = withUnsafePointer(to: &addr) { ptr in
+                ptr.withMemoryRebound(to: sockaddr.self, capacity: 1) { sockaddrPtr in
+                    bind(socket1, sockaddrPtr, socklen_t(MemoryLayout<sockaddr_in>.size))
+                }
+            }
+            
+            close(socket1)
+            
+            if bindResult == 0 {
+                hasPermission = true
+            }
+        }
+        
+        // Test 2: Try UDP on port 5960 (NDI discovery) - this is most important
+        if !hasPermission {
+            let socket2 = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)
+            if socket2 >= 0 {
+                var addr = sockaddr_in()
+                addr.sin_family = sa_family_t(AF_INET)
+                addr.sin_port = UInt16(5960).bigEndian
+                addr.sin_addr.s_addr = INADDR_ANY
+                
+                let bindResult = withUnsafePointer(to: &addr) { ptr in
+                    ptr.withMemoryRebound(to: sockaddr.self, capacity: 1) { sockaddrPtr in
+                        bind(socket2, sockaddrPtr, socklen_t(MemoryLayout<sockaddr_in>.size))
+                    }
                 }
                 
-                // Stop monitoring after initial check
-                self?.monitor?.cancel()
+                close(socket2)
+                
+                if bindResult == 0 {
+                    hasPermission = true
+                }
             }
         }
         
-        monitor?.start(queue: queue)
+        // Wait a moment for any permission dialogs
+        Thread.sleep(forTimeInterval: 0.5)
         
-        // Also try to bind a socket to force permission prompt
-        DispatchQueue.global().async { [weak self] in
-            self?.triggerPermissionPrompt()
-        }
-    }
-    
-    /// Trigger the system permission prompt by attempting network access
-    private func triggerPermissionPrompt() {
-        // Create a simple UDP socket to trigger the local network permission prompt
-        let socket = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)
-        guard socket >= 0 else { return }
-        
-        // Try to bind to any available port (this triggers the permission prompt)
-        var addr = sockaddr_in()
-        addr.sin_family = sa_family_t(AF_INET)
-        addr.sin_port = 0  // Any port
-        addr.sin_addr.s_addr = INADDR_ANY
-        
-        withUnsafePointer(to: &addr) { ptr in
-            ptr.withMemoryRebound(to: sockaddr.self, capacity: 1) { sockaddrPtr in
-                let _ = bind(socket, sockaddrPtr, socklen_t(MemoryLayout<sockaddr_in>.size))
-            }
-        }
-        
-        close(socket)
-        
-        // Wait a moment and check again
-        Thread.sleep(forTimeInterval: 1.0)
         DispatchQueue.main.async { [weak self] in
-            self?.recheckPermission()
-        }
-    }
-    
-    /// Recheck permission after a delay
-    private func recheckPermission() {
-        // If still denied after prompt, show alert
-        if permissionStatus == .denied {
-            showPermissionAlert = true
+            self?.hasNetworkPermission = hasPermission
+            self?.permissionStatus = hasPermission ? .granted : .denied
+            
+            if !hasPermission {
+                self?.showPermissionAlert = true
+            }
         }
     }
     
