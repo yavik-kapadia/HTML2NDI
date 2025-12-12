@@ -43,29 +43,48 @@ struct DashboardView: View {
                         .textFieldStyle(.roundedBorder)
                         .padding(.horizontal)
                     
-                    // Network Permission Status
-                    if networkChecker.permissionStatus != .granted {
+                    // Network Permission Status (always visible)
+                    VStack(spacing: 6) {
                         HStack(spacing: 8) {
-                            Image(systemName: networkChecker.permissionStatus == .denied ? "exclamationmark.triangle.fill" : "network")
+                            Image(systemName: networkChecker.permissionStatus == .denied ? "exclamationmark.triangle.fill" : 
+                                            networkChecker.permissionStatus == .granted ? "checkmark.circle.fill" : "network")
                                 .foregroundColor(networkChecker.statusColor)
-                            Text(networkChecker.statusMessage)
-                                .font(.caption)
-                                .foregroundColor(.secondary)
                             
-                            if networkChecker.permissionStatus == .denied {
-                                Button("Fix") {
-                                    networkChecker.openSystemSettings()
-                                }
-                                .buttonStyle(.bordered)
-                                .controlSize(.mini)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Network Permissions")
+                                    .font(.caption)
+                                    .fontWeight(.medium)
+                                Text(networkChecker.permissionStatus == .granted ? "Local network access enabled" : networkChecker.statusMessage)
+                                    .font(.caption2)
+                                    .foregroundColor(.secondary)
                             }
+                            
+                            Spacer()
+                            
+                            Menu {
+                                Button(action: { networkChecker.checkNetworkPermission() }) {
+                                    Label("Recheck", systemImage: "arrow.clockwise")
+                                }
+                                
+                                if networkChecker.permissionStatus != .granted {
+                                    Divider()
+                                    Button(action: { networkChecker.openSystemSettings() }) {
+                                        Label("Open Settings", systemImage: "gear")
+                                    }
+                                }
+                            } label: {
+                                Image(systemName: "ellipsis.circle")
+                                    .foregroundColor(.secondary)
+                            }
+                            .menuStyle(.borderlessButton)
+                            .fixedSize()
                         }
-                        .padding(.horizontal)
-                        .padding(.vertical, 6)
-                        .background(networkChecker.statusColor.opacity(0.1))
-                        .cornerRadius(6)
-                        .padding(.horizontal)
                     }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(networkChecker.statusColor.opacity(0.1))
+                    .cornerRadius(8)
+                    .padding(.horizontal)
                 }
                 .padding(.bottom, 8)
                 
