@@ -178,75 +178,192 @@ jobs:
       run: |
         APP_DIR="${{ env.APP_DIR }}"
         WORKER="$APP_DIR/Contents/Resources/html2ndi.app"
-        WORKER_BIN="$WORKER/Contents/MacOS/html2ndi"
         FRAMEWORKS="$WORKER/Contents/Frameworks"
         
-        echo "Checking dependencies for worker binary..."
+        echo "===== COMPREHENSIVE HOMEBREW DEPENDENCY SCAN ====="
+        echo "Scanning ALL binaries in the app bundle for Homebrew dependencies..."
+        echo ""
         
-        # Get all Homebrew dependencies
-        HOMEBREW_LIBS=$(otool -L "$WORKER_BIN" | grep '/opt/homebrew' | awk '{print $1}' || true)
-        
-        if [ -n "$HOMEBREW_LIBS" ]; then
-          echo "Found Homebrew dependencies that need bundling:"
-          echo "$HOMEBREW_LIBS"
+        # Function to find and bundle a library
+        bundle_library() {
+          local lib_path="$1"
+          local lib_name=$(basename "$lib_path")
           
-          # Copy each missing library
-          for lib in $HOMEBREW_LIBS; do
-            if [ -f "$lib" ]; then
-              lib_name=$(basename "$lib")
-              echo "Bundling: $lib_name"
-              cp "$lib" "$FRAMEWORKS/$lib_name"
-              chmod 644 "$FRAMEWORKS/$lib_name"
-              
-              # Fix the reference in the main binary
-              install_name_tool -change "$lib" "@rpath/$lib_name" "$WORKER_BIN"
-              
-              # CRITICAL: Also check this library's dependencies (transitive)
-              LIB_DEPS=$(otool -L "$FRAMEWORKS/$lib_name" | grep '/opt/homebrew' | awk '{print $1}' || true)
-              for dep in $LIB_DEPS; do
-                dep_name=$(basename "$dep")
-                if [ -f "/opt/homebrew/opt/$(echo $dep | cut -d'/' -f4)/lib/$dep_name" ]; then
-                  dep_path="/opt/homebrew/opt/$(echo $dep | cut -d'/' -f4)/lib/$dep_name"
-                elif [ -f "$dep" ]; then
-                  dep_path="$dep"
-                else
-                  continue
-                fi
-                
-                # Bundle the dependency if not already present
-                if [ ! -f "$FRAMEWORKS/$dep_name" ]; then
-                  echo "  → Bundling transitive dependency: $dep_name"
-                  cp "$dep_path" "$FRAMEWORKS/$dep_name"
-                  chmod 644 "$FRAMEWORKS/$dep_name"
-                fi
-                
-                # Fix the reference in the bundled library
-                install_name_tool -change "$dep" "@rpath/$dep_name" "$FRAMEWORKS/$lib_name"
-              done
-            else
-              echo "Warning: Library not found: $lib"
-            fi
-          done
+          # Skip if already bundled
+          if [ -f "$FRAMEWORKS/$lib_name" ]; then
+            return 0
+          fi
           
-          # Also check CEF framework
-          CEF_BIN="$WORKER/Contents/Frameworks/Chromium Embedded Framework.framework/Chromium Embedded Framework"
-          if [ -f "$CEF_BIN" ]; then
-            CEF_HOMEBREW_LIBS=$(otool -L "$CEF_BIN" | grep '/opt/homebrew' | awk '{print $1}' || true)
-            for lib in $CEF_HOMEBREW_LIBS; do
-              if [ -f "$lib" ]; then
-                lib_name=$(basename "$lib")
-                echo "Bundling (for CEF): $lib_name"
-                cp "$lib" "$FRAMEWORKS/$lib_name"
-                chmod 644 "$FRAMEWORKS/$lib_name"
-                install_name_tool -change "$lib" "@rpath/$lib_name" "$CEF_BIN"
+          # Search for the actual file
+          local found_path=""
+          if [ -f "$lib_path" ]; then
+            found_path="$lib_path"
+          else
+            # Try common Homebrew locations (handle wildcards)
+            for search_dir in /opt/homebrew/lib /opt/homebrew/opt/*/lib /opt/homebrew/Cellar/*/lib; do
+              if [ -f "$search_dir/$lib_name" ]; then
+                found_path="$search_dir/$lib_name"
+                break
               fi
             done
           fi
           
-          echo "Dependency bundling complete"
-        else
-          echo "No Homebrew dependencies found - all good!"
+          if [ -n "$found_path" ]; then
+            echo "  📦 Bundling: $lib_name (from $found_path)"
+            cp "$found_path" "$FRAMEWORKS/$lib_name"
+            chmod 644 "$FRAMEWORKS/$lib_name"
+            return 0
+          else
+            echo "  ⚠️  Warning: Could not find: $lib_name"
+            return 1
+          fi
+        }
+        
+        # Function to fix references in a binary
+        fix_binary_references() {
+          local binary="$1"
+          local binary_name=$(basename "$binary")
+          
+          echo "  🔧 Fixing references in: $binary_name"
+          
+          local deps=$(otool -L "$binary" | grep '/opt/homebrew' | awk '{print $1}' || true)
+          for dep in $deps; do
+            local dep_name=$(basename "$dep")
+            
+            # Ensure the dependency is bundled
+            bundle_library "$dep"
+            
+            # Fix the reference
+            install_name_tool -change "$dep" "@rpath/$dep_name" "$binary" 2>/dev/null || true
+          done
+        }
+        
+        # Step 1: Find all binaries and frameworks in the app
+        echo "Step 1: Discovering all binaries in the app bundle..."
+        BINARIES=()
+        
+        # Main worker binary
+        BINARIES+=("$WORKER/Contents/MacOS/html2ndi")
+        
+        # CEF framework
+        if [ -f "$WORKER/Contents/Frameworks/Chromium Embedded Framework.framework/Chromium Embedded Framework" ]; then
+          BINARIES+=("$WORKER/Contents/Frameworks/Chromium Embedded Framework.framework/Chromium Embedded Framework")
         fi
+        
+        # All existing dylibs in Frameworks
+        while IFS= read -r -d '' dylib; do
+          BINARIES+=("$dylib")
+        done < <(find "$FRAMEWORKS" -maxdepth 1 -name "*.dylib" -type f -print0 2>/dev/null || true)
+        
+        # CEF Helper processes
+        while IFS= read -r -d '' helper; do
+          BINARIES+=("$helper")
+        done < <(find "$FRAMEWORKS" -name "*.app" -type d -exec find {} -type f -perm +111 -print0 \; 2>/dev/null || true)
+        
+        echo "Found ${#BINARIES[@]} binaries to scan"
+        echo ""
+        
+        # Step 2: Scan all binaries for Homebrew dependencies
+        echo "Step 2: Scanning for Homebrew dependencies..."
+        ALL_HOMEBREW_DEPS=()
+        
+        for binary in "${BINARIES[@]}"; do
+          if [ ! -f "$binary" ]; then
+            continue
+          fi
+          
+          deps=$(otool -L "$binary" 2>/dev/null | grep '/opt/homebrew' | awk '{print $1}' || true)
+          if [ -n "$deps" ]; then
+            echo "  📍 $(basename "$binary"): found Homebrew dependencies"
+            while IFS= read -r dep; do
+              if [ -n "$dep" ]; then
+                ALL_HOMEBREW_DEPS+=("$dep")
+              fi
+            done <<< "$deps"
+          fi
+        done
+        
+        # Remove duplicates
+        UNIQUE_DEPS=($(printf '%s\n' "${ALL_HOMEBREW_DEPS[@]}" | sort -u))
+        
+        if [ ${#UNIQUE_DEPS[@]} -eq 0 ]; then
+          echo ""
+          echo "✅ No Homebrew dependencies found - app is self-contained!"
+          exit 0
+        fi
+        
+        echo ""
+        echo "Found ${#UNIQUE_DEPS[@]} unique Homebrew dependencies:"
+        printf '  - %s\n' "${UNIQUE_DEPS[@]}"
+        echo ""
+        
+        # Step 3: Bundle all dependencies (and their transitive deps)
+        echo "Step 3: Bundling all dependencies..."
+        bundled_count=0
+        for dep in "${UNIQUE_DEPS[@]}"; do
+          if bundle_library "$dep"; then
+            ((bundled_count++))
+          fi
+        done
+        
+        echo ""
+        echo "Bundled $bundled_count libraries"
+        echo ""
+        
+        # Step 4: Handle transitive dependencies (libraries that the bundled libs depend on)
+        echo "Step 4: Checking for transitive dependencies..."
+        MAX_ITERATIONS=5
+        iteration=0
+        
+        while [ $iteration -lt $MAX_ITERATIONS ]; do
+          ((iteration++))
+          echo "  Iteration $iteration..."
+          
+          new_deps_found=false
+          
+          # Check all currently bundled dylibs for new Homebrew deps
+          while IFS= read -r -d '' dylib; do
+            deps=$(otool -L "$dylib" 2>/dev/null | grep '/opt/homebrew' | awk '{print $1}' || true)
+            for dep in $deps; do
+              dep_name=$(basename "$dep")
+              
+              if [ ! -f "$FRAMEWORKS/$dep_name" ]; then
+                echo "    → Found new transitive dependency: $dep_name"
+                if bundle_library "$dep"; then
+                  new_deps_found=true
+                fi
+              fi
+            done
+          done < <(find "$FRAMEWORKS" -maxdepth 1 -name "*.dylib" -type f -print0 2>/dev/null || true)
+          
+          if [ "$new_deps_found" = false ]; then
+            echo "    ✅ No new dependencies found"
+            break
+          fi
+        done
+        
+        echo ""
+        
+        # Step 5: Fix all references in all binaries
+        echo "Step 5: Fixing library references in all binaries..."
+        
+        for binary in "${BINARIES[@]}"; do
+          if [ -f "$binary" ]; then
+            fix_binary_references "$binary"
+          fi
+        done
+        
+        # Also fix references in all bundled dylibs
+        while IFS= read -r -d '' dylib; do
+          fix_binary_references "$dylib"
+        done < <(find "$FRAMEWORKS" -maxdepth 1 -name "*.dylib" -type f -print0 2>/dev/null || true)
+        
+        echo ""
+        echo "===== DEPENDENCY BUNDLING COMPLETE ====="
+        echo ""
+        echo "Final bundled libraries:"
+        ls -1 "$FRAMEWORKS"/*.dylib 2>/dev/null | xargs -n1 basename || echo "(none)"
+        echo ""
 
     - name: Code Sign Application
       env:
