@@ -89,7 +89,7 @@ jobs:
       run: |
         cd build
         ctest --output-on-failure --timeout 60
-    
+
     - name: Install jq for integration tests
       run: brew install jq
     

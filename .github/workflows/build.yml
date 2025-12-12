@@ -92,7 +92,7 @@ jobs:
     # Note: Swift tests require Xcode project for menu bar apps
     # SPM doesn't support XCTest with SwiftUI/AppKit apps properly
     # Use xcodebuild test with an Xcode project for full Swift test coverage
-    
+
     - name: Install jq for JSON parsing
       run: brew install jq
     
