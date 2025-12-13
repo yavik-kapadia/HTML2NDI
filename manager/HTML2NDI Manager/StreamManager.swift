@@ -297,11 +297,48 @@ class StreamInstance: ObservableObject, Identifiable, Hashable {
             isHealthy = true
         }
         
-        // Check if process is still responding
-        if let proc = process, !proc.isRunning {
-            logWarning("Stream '\(config.name)' process died unexpectedly")
-            handleProcessTermination(exitCode: -1)
+        // Check if process is still alive
+        // Only trust process.isRunning if we also can't reach the HTTP API
+        if let proc = process {
+            if !proc.isRunning {
+                // Process object says it's not running - verify with HTTP check
+                verifyProcessState()
+            }
+        } else {
+            // No process object but isRunning is true - inconsistent state
+            logWarning("Stream '\(config.name)' has no process object but isRunning=true")
+            isRunning = false
         }
+    }
+    
+    private func verifyProcessState() {
+        // Double-check by trying to reach the HTTP API
+        guard let url = URL(string: "http://localhost:\(httpPort)/status") else { return }
+        
+        let task = URLSession.shared.dataTask(with: url) { [weak self] data, response, error in
+            guard let self = self else { return }
+            
+            if error != nil || data == nil {
+                // HTTP API not responding AND process.isRunning is false
+                // Process is definitely dead
+                DispatchQueue.main.async {
+                    if self.isRunning {
+                        self.logWarning("Stream '\(self.config.name)' process confirmed dead")
+                        self.handleProcessTermination(exitCode: -1)
+                    }
+                }
+            } else {
+                // HTTP API is responding - process is alive!
+                // Update isRunning to match reality
+                DispatchQueue.main.async {
+                    if !self.isRunning {
+                        self.logInfo("Stream '\(self.config.name)' process is actually alive, correcting state")
+                        self.isRunning = true
+                    }
+                }
+            }
+        }
+        task.resume()
     }
     
     func resetRestartCounter() {
@@ -342,31 +379,38 @@ class StreamInstance: ObservableObject, Identifiable, Hashable {
     }
     
     private func fetchStatus() {
-        guard httpPort > 0, isRunning else { return }
+        guard httpPort > 0 else { return }
         
         let url = URL(string: "http://localhost:\(httpPort)/status")!
-        URLSession.shared.dataTask(with: url) { [weak self] data, _, _ in
-            guard let data = data,
-                  let status = try? JSONDecoder().decode(StreamStatus.self, from: data) else { return }
+        URLSession.shared.dataTask(with: url) { [weak self] data, _, error in
+            guard let self = self else { return }
             
-            DispatchQueue.main.async {
-                self?.status = status
-                self?.actualFps = status.actual_fps
-                self?.connections = status.ndi_connections
-                
-                // Update tally state
-                if let tally = status.tally {
-                    self?.onProgram = tally.on_program
-                    self?.onPreview = tally.on_preview
-                }
-                
-                // Update frame statistics
-                if let stats = status.stats {
-                    self?.framesSent = stats.frames_sent
-                    self?.framesDropped = stats.frames_dropped
-                    self?.dropRate = stats.drop_rate
-                    self?.uptimeSeconds = stats.uptime_seconds
-                    self?.bandwidthMbps = stats.bandwidth_mbps
+            if let data = data, let status = try? JSONDecoder().decode(StreamStatus.self, from: data) {
+                DispatchQueue.main.async {
+                    // Successfully fetched status - process is definitely running
+                    if !self.isRunning {
+                        self.logInfo("Stream '\(self.config.name)' responded to status check, updating isRunning=true")
+                        self.isRunning = true
+                    }
+                    
+                    self.status = status
+                    self.actualFps = status.actual_fps
+                    self.connections = status.ndi_connections
+                    
+                    // Update tally state
+                    if let tally = status.tally {
+                        self.onProgram = tally.on_program
+                        self.onPreview = tally.on_preview
+                    }
+                    
+                    // Update frame statistics
+                    if let stats = status.stats {
+                        self.framesSent = stats.frames_sent
+                        self.framesDropped = stats.frames_dropped
+                        self.dropRate = stats.drop_rate
+                        self.uptimeSeconds = stats.uptime_seconds
+                        self.bandwidthMbps = stats.bandwidth_mbps
+                    }
                 }
             }
         }.resume()
