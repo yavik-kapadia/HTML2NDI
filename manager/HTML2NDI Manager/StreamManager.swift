@@ -323,7 +323,7 @@ class StreamInstance: ObservableObject, Identifiable, Hashable {
                 // Process is definitely dead
                 DispatchQueue.main.async {
                     if self.isRunning {
-                        self.logWarning("Stream '\(self.config.name)' process confirmed dead")
+                        logWarning("Stream '\(self.config.name)' process confirmed dead")
                         self.handleProcessTermination(exitCode: -1)
                     }
                 }
@@ -332,7 +332,7 @@ class StreamInstance: ObservableObject, Identifiable, Hashable {
                 // Update isRunning to match reality
                 DispatchQueue.main.async {
                     if !self.isRunning {
-                        self.logInfo("Stream '\(self.config.name)' process is actually alive, correcting state")
+                        logInfo("Stream '\(self.config.name)' process is actually alive, correcting state")
                         self.isRunning = true
                     }
                 }
@@ -389,7 +389,7 @@ class StreamInstance: ObservableObject, Identifiable, Hashable {
                 DispatchQueue.main.async {
                     // Successfully fetched status - process is definitely running
                     if !self.isRunning {
-                        self.logInfo("Stream '\(self.config.name)' responded to status check, updating isRunning=true")
+                        logInfo("Stream '\(self.config.name)' responded to status check, updating isRunning=true")
                         self.isRunning = true
                     }
                     
