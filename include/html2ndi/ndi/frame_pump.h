@@ -72,9 +72,14 @@ public:
     uint64_t frames_sent() const { return frames_sent_; }
     
     /**
-     * Get the number of frames dropped.
+     * Get the number of frames dropped (truly unavailable).
      */
     uint64_t frames_dropped() const { return frames_dropped_; }
+    
+    /**
+     * Get the number of frames held (repeated during content changes).
+     */
+    uint64_t frames_held() const { return frames_held_; }
     
     /**
      * Get uptime in seconds.
@@ -145,6 +150,7 @@ private:
     // Statistics
     std::atomic<uint64_t> frames_sent_{0};
     std::atomic<uint64_t> frames_dropped_{0};
+    std::atomic<uint64_t> frames_held_{0};
     std::chrono::steady_clock::time_point start_time_;
     
     // Current frame info for bandwidth calculation

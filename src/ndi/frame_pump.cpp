@@ -40,6 +40,7 @@ void FramePump::start() {
     fps_frame_count_ = 0;
     frames_sent_ = 0;
     frames_dropped_ = 0;
+    frames_held_ = 0;
     
     thread_ = std::thread(&FramePump::pump_thread, this);
 }
@@ -58,8 +59,8 @@ void FramePump::stop() {
         thread_.join();
     }
     
-    LOG_DEBUG("Frame pump stopped. Sent: %llu, Dropped: %llu", 
-              frames_sent_.load(), frames_dropped_.load());
+    LOG_DEBUG("Frame pump stopped. Sent: %llu, Dropped: %llu, Held: %llu", 
+              frames_sent_.load(), frames_dropped_.load(), frames_held_.load());
 }
 
 void FramePump::submit_frame(const void* data, int width, int height) {
@@ -149,18 +150,25 @@ void FramePump::pump_thread() {
         {
             std::lock_guard<std::mutex> lock(buffer_mutex_);
             
-            if (!buffer.ready) {
-                // No new frame, count as dropped
+            // Determine which frame to send: new or held
+            bool send_new_frame = buffer.ready;
+            bool can_send_frame = send_new_frame || (!buffer.data.empty() && buffer.width > 0 && buffer.height > 0);
+            
+            if (!can_send_frame) {
+                // Truly no frame available (startup condition before first frame)
                 frames_dropped_++;
                 continue;
             }
             
-            // Send frame to NDI with proper timecode
+            // Track frame hold if repeating previous frame
+            if (!send_new_frame) {
+                frames_held_++;
+            }
+            
+            // Send frame to NDI (new or repeated for seamless output)
             if (sender_) {
-                // Temporarily store timecode in video frame
                 auto saved_timecode = sender_->get_timecode_mode();
                 
-                // Use genlock timecode if available
                 if (genlock_clock_ && genlock_clock_->mode() != GenlockMode::Disabled) {
                     sender_->set_timecode(genlock_clock_->get_ndi_timecode());
                 }
@@ -174,11 +182,15 @@ void FramePump::pump_thread() {
                     progressive_
                 );
                 
-                // Restore timecode mode
                 sender_->set_timecode_mode(saved_timecode);
             }
             
-            buffer.ready = false;
+            // Mark new frame as consumed
+            if (send_new_frame) {
+                buffer.ready = false;
+            }
+            // Note: Frame hold (repeating) is NOT counted as dropped
+            // The stream continues seamlessly at target framerate
         }
         
         frames_sent_++;

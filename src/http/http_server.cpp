@@ -372,6 +372,8 @@ void HttpServer::setup_routes() {
         add_cors(res);
         
         auto* ndi = app_->ndi_sender();
+        auto* pump = app_->frame_pump();
+        
         json status = {
             {"url", app_->current_url()},
             {"width", app_->config().width},
@@ -386,6 +388,12 @@ void HttpServer::setup_routes() {
                 {"colorspace", ndi->color_space_name()},
                 {"gamma", ndi->gamma_mode_name()},
                 {"range", ndi->color_range_name()}
+            }},
+            {"frames", {
+                {"sent", pump ? pump->frames_sent() : 0},
+                {"dropped", pump ? pump->frames_dropped() : 0},
+                {"held", pump ? pump->frames_held() : 0},
+                {"drop_rate", pump ? pump->drop_rate() : 0.0}
             }}
         };
         
