@@ -5,6 +5,7 @@
 #include "html2ndi/http/http_server.h"
 #include "html2ndi/application.h"
 #include "html2ndi/ndi/ndi_sender.h"
+#include "html2ndi/ndi/frame_pump.h"
 #include "html2ndi/ndi/genlock.h"
 #include "html2ndi/utils/logger.h"
 
