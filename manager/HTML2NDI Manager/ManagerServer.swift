@@ -147,7 +147,11 @@ class ManagerServer {
     // MARK: - API Handlers
     
     private func getStreamsJSON() -> String {
-        let streams = StreamManager.shared.streams.map { stream -> [String: Any] in
+        // Access streams on main thread to ensure thread-safety with @Published
+        var streamsData: [[String: Any]] = []
+        
+        DispatchQueue.main.sync {
+            streamsData = StreamManager.shared.streams.map { stream -> [String: Any] in
             var dict: [String: Any] = [
                 "id": stream.id.uuidString,
                 "name": stream.config.name,
@@ -186,10 +190,11 @@ class ManagerServer {
                 dict["errorTime"] = ISO8601DateFormatter().string(from: errorTime)
             }
             
-            return dict
+                return dict
+            }
         }
         
-        if let data = try? JSONSerialization.data(withJSONObject: streams),
+        if let data = try? JSONSerialization.data(withJSONObject: streamsData),
            let json = String(data: data, encoding: .utf8) {
             return json
         }
