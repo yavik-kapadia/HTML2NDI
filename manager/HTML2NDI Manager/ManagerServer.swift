@@ -682,17 +682,17 @@ class ManagerServer {
             function hideAddModal() { document.getElementById('addModal').classList.remove('show'); }
             
             function updateFormatPreview() {
-                const res = document.getElementById('newRes').value;
+                const resolution = document.getElementById('newRes').value;
                 const scan = document.getElementById('newScan').value;
                 const fps = document.getElementById('newFps').value;
-                const [w, h] = res.split('x');
+                const [w, h] = resolution.split('x');
                 const formatName = h === '2160' ? '4K' : h === '1440' ? 'QHD' : h === '1080' ? '1080' : h === '720' ? '720' : h;
                 document.getElementById('formatPreview').textContent = `${formatName}${scan}${fps}`;
             }
             
             async function addStream() {
-                const res = document.getElementById('newRes').value;
-                const [width, height] = res.split('x').map(Number);
+                const resolution = document.getElementById('newRes').value;
+                const [width, height] = resolution.split('x').map(Number);
                 const data = {
                     name: document.getElementById('newName').value,
                     url: document.getElementById('newUrl').value || '',  // Empty = test card
