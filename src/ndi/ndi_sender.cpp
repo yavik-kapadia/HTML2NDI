@@ -130,7 +130,7 @@ void NdiSender::send_audio_frame(
     audio_frame_.no_channels = channels;
     audio_frame_.no_samples = samples;
     audio_frame_.timecode = NDIlib_send_timecode_synthesize;
-    audio_frame_.p_data = reinterpret_cast<uint8_t*>(const_cast<float*>(data));
+    audio_frame_.p_data = const_cast<float*>(data);
     audio_frame_.channel_stride_in_bytes = samples * sizeof(float);
     audio_frame_.p_metadata = nullptr;
     audio_frame_.timestamp = 0;

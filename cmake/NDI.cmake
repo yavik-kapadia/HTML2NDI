@@ -91,8 +91,12 @@ typedef struct {
 typedef enum {
     NDIlib_FourCC_video_type_RGBA = 0x41424752,
     NDIlib_FourCC_video_type_BGRA = 0x41524742,
+    NDIlib_FourCC_video_type_BGRX = 0x58524742,
     NDIlib_FourCC_video_type_UYVY = 0x59565955,
 } NDIlib_FourCC_video_type_e;
+
+// Timecode constants
+#define NDIlib_send_timecode_synthesize INT64_C(0x7FFFFFFFFFFFFFFF)
 
 typedef enum {
     NDIlib_frame_format_type_progressive = 1,
@@ -127,12 +131,26 @@ typedef struct {
     int64_t timestamp;
 } NDIlib_audio_frame_v3_t;
 
+// Tally structures
+typedef struct {
+    bool on_program;
+    bool on_preview;
+} NDIlib_tally_t;
+
+// Source structure
+typedef struct {
+    const char* p_ndi_name;
+    const char* p_url_address;
+} NDIlib_source_t;
+
 // Send functions
 NDIlib_send_instance_t NDIlib_send_create(const NDIlib_send_create_t* p_create_settings);
 void NDIlib_send_destroy(NDIlib_send_instance_t p_instance);
 void NDIlib_send_send_video_v2(NDIlib_send_instance_t p_instance, const NDIlib_video_frame_v2_t* p_video_data);
 void NDIlib_send_send_audio_v3(NDIlib_send_instance_t p_instance, const NDIlib_audio_frame_v3_t* p_audio_data);
 int NDIlib_send_get_no_connections(NDIlib_send_instance_t p_instance, uint32_t timeout_in_ms);
+const NDIlib_source_t* NDIlib_send_get_source_name(NDIlib_send_instance_t p_instance);
+bool NDIlib_send_get_tally(NDIlib_send_instance_t p_instance, NDIlib_tally_t* p_tally, uint32_t timeout_in_ms);
 
 #ifdef __cplusplus
 }

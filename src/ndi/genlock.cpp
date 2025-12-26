@@ -67,6 +67,8 @@ bool GenlockClock::initialize() {
         return false;
     }
     
+    LOG_DEBUG("Created genlock socket: fd=%d", socket_fd_);
+    
     // Set socket options
     int reuse = 1;
     if (setsockopt(socket_fd_, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse)) < 0) {
@@ -74,17 +76,25 @@ bool GenlockClock::initialize() {
     }
     
     if (mode_ == GenlockMode::Master) {
-        // Master: bind to port for sending
+        // Master: bind to port for sending (OS will assign ephemeral port)
         struct sockaddr_in addr{};
         addr.sin_family = AF_INET;
         addr.sin_addr.s_addr = INADDR_ANY;
         addr.sin_port = 0;  // Let system assign port
         
         if (bind(socket_fd_, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
-            LOG_ERROR("Failed to bind genlock socket: %s", strerror(errno));
+            LOG_ERROR("Failed to bind genlock master socket: %s", strerror(errno));
             close(socket_fd_);
             socket_fd_ = -1;
             return false;
+        }
+        
+        // Get the assigned port for logging
+        struct sockaddr_in bound_addr{};
+        socklen_t len = sizeof(bound_addr);
+        if (getsockname(socket_fd_, (struct sockaddr*)&bound_addr, &len) == 0) {
+            LOG_INFO("Genlock master bound to port %d, will send to %s", 
+                     ntohs(bound_addr.sin_port), master_address_.c_str());
         }
         
         reference_time_ = std::chrono::steady_clock::now();
@@ -98,17 +108,22 @@ bool GenlockClock::initialize() {
             port = std::stoi(master_address_.substr(colon_pos + 1));
         }
         
+        LOG_INFO("Genlock slave attempting to bind to port %d", port);
+        
         struct sockaddr_in addr{};
         addr.sin_family = AF_INET;
         addr.sin_addr.s_addr = INADDR_ANY;
         addr.sin_port = htons(port);
         
         if (bind(socket_fd_, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
-            LOG_ERROR("Failed to bind genlock socket to port %d: %s", port, strerror(errno));
+            LOG_ERROR("Failed to bind genlock slave socket to port %d: %s", port, strerror(errno));
             close(socket_fd_);
             socket_fd_ = -1;
             return false;
         }
+        
+        LOG_INFO("Genlock slave successfully bound to port %d, waiting for master at %s", 
+                 port, master_address_.c_str());
         
         // Set receive timeout
         struct timeval tv{};
@@ -138,18 +153,28 @@ void GenlockClock::shutdown() {
     
     LOG_DEBUG("Shutting down genlock...");
     
+    // Signal thread to stop
     running_ = false;
     
+    // Join thread if it exists and is joinable
     if (sync_thread_.joinable()) {
-        sync_thread_.join();
+        try {
+            sync_thread_.join();
+        } catch (const std::system_error& e) {
+            LOG_ERROR("Error joining genlock thread: %s", e.what());
+        }
     }
     
+    // Close socket
     if (socket_fd_ >= 0) {
         close(socket_fd_);
         socket_fd_ = -1;
     }
     
+    // Mark as uninitialized
     initialized_ = false;
+    synchronized_ = false;
+    
     LOG_DEBUG("Genlock shutdown complete");
 }
 
@@ -209,16 +234,23 @@ void GenlockClock::set_mode(GenlockMode mode) {
         return;
     }
     
+    // Shutdown current mode if initialized
     bool was_initialized = initialized_;
     if (was_initialized) {
         shutdown();
+        // Give thread time to fully exit
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
     
+    // Update mode
     mode_ = mode;
     synchronized_ = false;
     
+    // Reinitialize in new mode if needed
     if (was_initialized && mode != GenlockMode::Disabled) {
-        initialize();
+        if (!initialize()) {
+            LOG_ERROR("Failed to reinitialize genlock in new mode");
+        }
     }
 }
 
@@ -227,15 +259,22 @@ void GenlockClock::set_master_address(const std::string& address) {
         return;
     }
     
+    // Shutdown if currently running as slave
     bool was_initialized = initialized_ && mode_ == GenlockMode::Slave;
     if (was_initialized) {
         shutdown();
+        // Give thread time to fully exit
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
     
+    // Update address
     master_address_ = address;
     
+    // Reinitialize if needed
     if (was_initialized) {
-        initialize();
+        if (!initialize()) {
+            LOG_ERROR("Failed to reinitialize genlock with new master address");
+        }
     }
 }
 
@@ -251,7 +290,7 @@ GenlockClock::Stats GenlockClock::get_stats() const {
 }
 
 void GenlockClock::master_thread() {
-    LOG_DEBUG("Genlock master thread started");
+    LOG_INFO("Genlock master thread started");
     
     // Parse master address for broadcast
     std::string ip_addr = "127.0.0.1";
@@ -262,6 +301,8 @@ void GenlockClock::master_thread() {
         ip_addr = master_address_.substr(0, colon_pos);
         port = std::stoi(master_address_.substr(colon_pos + 1));
     }
+    
+    LOG_INFO("Genlock master will send sync packets to %s:%d", ip_addr.c_str(), port);
     
     struct sockaddr_in dest_addr{};
     dest_addr.sin_family = AF_INET;
@@ -299,8 +340,15 @@ void GenlockClock::master_thread() {
         
         if (sent == sizeof(packet)) {
             packets_sent_++;
+            // Log first few packets for debugging
+            if (packets_sent_ <= 3 || packets_sent_ % 60 == 0) {
+                LOG_DEBUG("Genlock master sent packet #%llu (frame %lld)", 
+                         packets_sent_.load(), packet.frame_number);
+            }
         } else if (sent < 0) {
-            LOG_DEBUG("Failed to send genlock packet: %s", strerror(errno));
+            LOG_ERROR("Failed to send genlock packet: %s (errno=%d)", strerror(errno), errno);
+        } else {
+            LOG_WARNING("Partial send: sent %zd bytes, expected %zu", sent, sizeof(packet));
         }
         
         // Schedule next send
@@ -312,7 +360,7 @@ void GenlockClock::master_thread() {
 }
 
 void GenlockClock::slave_thread() {
-    LOG_DEBUG("Genlock slave thread started");
+    LOG_INFO("Genlock slave thread started, waiting for sync packets...");
     
     GenlockPacket packet;
     struct sockaddr_in src_addr{};
@@ -321,6 +369,8 @@ void GenlockClock::slave_thread() {
     std::vector<int64_t> offset_history;
     offset_history.reserve(100);
     
+    int timeout_count = 0;
+    
     while (running_) {
         // Receive sync packet
         ssize_t received = recvfrom(socket_fd_, &packet, sizeof(packet), 0,
@@ -328,6 +378,18 @@ void GenlockClock::slave_thread() {
         
         if (received == sizeof(packet) && packet.validate()) {
             packets_received_++;
+            
+            // Log first few packets
+            if (packets_received_ == 1) {
+                char src_ip[INET_ADDRSTRLEN];
+                inet_ntop(AF_INET, &src_addr.sin_addr, src_ip, sizeof(src_ip));
+                LOG_INFO("Genlock slave received first sync packet from %s:%d", 
+                         src_ip, ntohs(src_addr.sin_port));
+            } else if (packets_received_ <= 5 || packets_received_ % 60 == 0) {
+                LOG_DEBUG("Genlock slave received packet #%llu", packets_received_.load());
+            }
+            
+            timeout_count = 0;
             
             // Calculate time offset
             auto local_now = std::chrono::steady_clock::now();
@@ -362,17 +424,26 @@ void GenlockClock::slave_thread() {
             synchronized_ = true;
             
         } else if (received < 0 && errno != EAGAIN && errno != EWOULDBLOCK) {
-            LOG_DEBUG("Failed to receive genlock packet: %s", strerror(errno));
+            LOG_ERROR("Failed to receive genlock packet: %s (errno=%d)", strerror(errno), errno);
             sync_failures_++;
+        } else if (received > 0 && received != sizeof(packet)) {
+            LOG_WARNING("Received partial packet: %zd bytes, expected %zu", received, sizeof(packet));
+        } else if (received > 0 && !packet.validate()) {
+            LOG_WARNING("Received invalid packet (bad magic or checksum)");
         }
         
-        // Check for sync timeout
+        // Check for sync timeout and log periodically
         if (!synchronized_ && packets_received_ == 0) {
+            timeout_count++;
+            if (timeout_count == 1 || timeout_count % 100 == 0) {
+                LOG_WARNING("Genlock slave waiting for sync packets... (no packets received yet, count=%d)", 
+                           timeout_count);
+            }
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
         }
     }
     
-    LOG_DEBUG("Genlock slave thread exited");
+    LOG_INFO("Genlock slave thread exited. Received %llu packets total", packets_received_.load());
 }
 
 void GenlockClock::update_sync_offset(int64_t offset_us) {
