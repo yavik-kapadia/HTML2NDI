@@ -471,6 +471,8 @@ jobs:
     - name: Create Release
       if: startsWith(github.ref, 'refs/tags/')
       uses: softprops/action-gh-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         files: |
           dist/*.dmg
@@ -488,7 +490,4 @@ jobs:
           The app is **code signed and notarized by Apple** - no security warnings!
           
           ---
-          
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

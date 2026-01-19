@@ -236,6 +236,22 @@ struct StreamSidebarRow: View {
                     }
                 }
             }
+            
+            // Start/Stop button
+            Button(action: {
+                if stream.isRunning {
+                    stream.stop()
+                } else {
+                    StreamManager.shared.startStream(stream)
+                }
+            }) {
+                Image(systemName: stream.isRunning ? "stop.fill" : "play.fill")
+                    .font(.system(size: 14))
+                    .foregroundColor(stream.isRunning ? .red : .green)
+                    .frame(width: 24, height: 24)
+            }
+            .buttonStyle(.plain)
+            .help(stream.isRunning ? "Stop stream" : "Start stream")
         }
         .padding(.vertical, 4)
         .contextMenu {

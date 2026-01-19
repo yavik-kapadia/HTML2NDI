@@ -116,6 +116,21 @@ public:
      * @return true if genlocked and synchronized
      */
     bool is_genlocked() const;
+    
+    /**
+     * Get current frame buffer size in bytes.
+     */
+    size_t current_buffer_size() const;
+    
+    /**
+     * Get average frame submit time in microseconds.
+     */
+    double avg_submit_time_us() const { return avg_submit_time_us_; }
+    
+    /**
+     * Get average memcpy time in microseconds.
+     */
+    double avg_memcpy_time_us() const { return avg_memcpy_time_us_; }
 
 private:
     void pump_thread();
@@ -161,6 +176,10 @@ private:
     std::chrono::steady_clock::time_point fps_start_;
     std::atomic<uint64_t> fps_frame_count_{0};
     std::atomic<float> measured_fps_{0.0f};
+    
+    // Performance metrics
+    std::atomic<double> avg_submit_time_us_{0.0};
+    std::atomic<double> avg_memcpy_time_us_{0.0};
 };
 
 } // namespace html2ndi

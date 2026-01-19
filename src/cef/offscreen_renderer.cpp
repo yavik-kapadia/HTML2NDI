@@ -117,6 +117,8 @@ bool OffscreenRenderer::initialize() {
     browser_settings.webgl = STATE_ENABLED;
     browser_settings.remote_fonts = STATE_ENABLED;
     
+    // Memory management (plugins setting not available in CEF 120)
+    
     // Create browser
     LOG_DEBUG("Creating browser window...");
     if (!CefBrowserHost::CreateBrowser(
@@ -218,6 +220,32 @@ std::string OffscreenRenderer::current_url() const {
         return handler_->GetCurrentUrl();
     }
     return config_.url;
+}
+
+void OffscreenRenderer::clear_cache() {
+    if (!initialized_ || !handler_) {
+        return;
+    }
+    
+    // ClearCache() not available in CEF 120 - would need to clear cache directory manually
+    LOG_INFO("Cache clearing requested (manual cleanup of cache directory required in CEF 120)");
+}
+
+void OffscreenRenderer::notify_memory_pressure() {
+    if (!initialized_ || !handler_) {
+        return;
+    }
+    
+    auto browser = handler_->GetBrowser();
+    if (browser) {
+        LOG_DEBUG("Sending memory pressure notification to CEF");
+        // Trigger JavaScript garbage collection via ExecuteJavaScript
+        browser->GetMainFrame()->ExecuteJavaScript(
+            "if (window.gc) { window.gc(); }",
+            browser->GetMainFrame()->GetURL(),
+            0
+        );
+    }
 }
 
 } // namespace html2ndi

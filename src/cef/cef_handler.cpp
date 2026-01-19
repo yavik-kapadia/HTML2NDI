@@ -41,6 +41,17 @@ void CefHandler::OnPaint(
         return;
     }
     
+    // Track paint timing
+    auto now = std::chrono::steady_clock::now();
+    if (paint_count_ > 0) {
+        auto interval = std::chrono::duration_cast<std::chrono::microseconds>(
+            now - last_paint_time_).count() / 1000.0;
+        double current_avg = avg_paint_interval_ms_.load();
+        avg_paint_interval_ms_ = 0.95 * current_avg + 0.05 * interval;
+    }
+    last_paint_time_ = now;
+    paint_count_++;
+    
     // Forward frame to callback
     if (frame_callback_) {
         frame_callback_(buffer, width, height);

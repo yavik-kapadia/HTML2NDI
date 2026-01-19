@@ -138,3 +138,5 @@ This release fixes critical genlock synchronization issues discovered through co
 
 **Full Changelog**: https://github.com/yourusername/HTML2NDI/compare/v1.5.11...v1.5.12
 
+
+

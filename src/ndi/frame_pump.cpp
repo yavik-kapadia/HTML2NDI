@@ -19,6 +19,14 @@ FramePump::FramePump(NdiSender* sender, int target_fps, bool progressive, std::s
     
     // Calculate frame duration
     frame_duration_ = std::chrono::nanoseconds(1'000'000'000 / target_fps);
+    
+    // Pre-allocate frame buffers to prevent fragmentation
+    // Reserve for 4K resolution (3840 x 2160 x 4 bytes BGRA)
+    size_t max_frame_size = 3840 * 2160 * 4;
+    buffers_[0].data.reserve(max_frame_size);
+    buffers_[1].data.reserve(max_frame_size);
+    
+    LOG_DEBUG("Frame buffers pre-allocated: %zu bytes each", max_frame_size);
 }
 
 FramePump::~FramePump() {
@@ -68,6 +76,8 @@ void FramePump::submit_frame(const void* data, int width, int height) {
         return;
     }
     
+    auto start_time = std::chrono::high_resolution_clock::now();
+    
     // Track current dimensions for bandwidth calculation
     current_width_ = width;
     current_height_ = height;
@@ -86,7 +96,16 @@ void FramePump::submit_frame(const void* data, int width, int height) {
             buffer.data.resize(size);
         }
         
+        auto memcpy_start = std::chrono::high_resolution_clock::now();
         std::memcpy(buffer.data.data(), data, size);
+        auto memcpy_end = std::chrono::high_resolution_clock::now();
+        
+        // Track memcpy time (exponential moving average)
+        auto memcpy_us = std::chrono::duration_cast<std::chrono::microseconds>(
+            memcpy_end - memcpy_start).count();
+        double current_avg = avg_memcpy_time_us_.load();
+        avg_memcpy_time_us_ = 0.9 * current_avg + 0.1 * memcpy_us;
+        
         buffer.width = width;
         buffer.height = height;
         buffer.ready = true;
@@ -98,6 +117,13 @@ void FramePump::submit_frame(const void* data, int width, int height) {
     
     // Notify pump thread
     buffer_cv_.notify_one();
+    
+    // Track total submit time
+    auto end_time = std::chrono::high_resolution_clock::now();
+    auto submit_us = std::chrono::duration_cast<std::chrono::microseconds>(
+        end_time - start_time).count();
+    double current_avg = avg_submit_time_us_.load();
+    avg_submit_time_us_ = 0.9 * current_avg + 0.1 * submit_us;
 }
 
 void FramePump::set_target_fps(int fps) {
@@ -285,6 +311,12 @@ uint64_t FramePump::bandwidth_bytes_per_sec() const {
     
     // BGRA = 4 bytes per pixel
     return static_cast<uint64_t>(width) * height * 4 * fps;
+}
+
+size_t FramePump::current_buffer_size() const {
+    int read_idx = read_buffer_.load();
+    const FrameBuffer& buffer = buffers_[read_idx];
+    return buffer.data.size();
 }
 
 } // namespace html2ndi

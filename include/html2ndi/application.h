@@ -109,6 +109,11 @@ public:
      * Get frame pump.
      */
     FramePump* frame_pump() { return frame_pump_.get(); }
+    
+    /**
+     * Get renderer for direct access.
+     */
+    OffscreenRenderer* renderer() { return renderer_.get(); }
 
 private:
     Config config_;
@@ -123,6 +128,19 @@ private:
     // Actual measured FPS
     std::atomic<float> actual_fps_{0.0f};
     std::atomic<std::string*> current_url_;
+    
+    // Performance monitoring
+    std::chrono::steady_clock::time_point start_time_;
+    std::chrono::steady_clock::time_point last_reload_time_;
+    std::chrono::steady_clock::time_point last_gc_time_;
+    int degradation_count_{0};
+    
+    // Performance monitoring thresholds (constants)
+    static constexpr int kWatchdogStartupDelay = 60;        // seconds
+    static constexpr float kFpsThresholdRatio = 0.5f;       // 50% of target
+    static constexpr int kDegradationCheckCount = 5;        // consecutive checks
+    static constexpr int kMinReloadInterval = 30;           // seconds
+    static constexpr int kGarbageCollectionInterval = 300;  // seconds (5 min)
 };
 
 } // namespace html2ndi

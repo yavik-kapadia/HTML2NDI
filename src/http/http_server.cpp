@@ -16,6 +16,11 @@
 #include <filesystem>
 #include <mach-o/dyld.h>
 
+#ifdef __APPLE__
+#include <mach/mach.h>
+#include <mach/task_info.h>
+#endif
+
 using json = nlohmann::json;
 
 namespace html2ndi {
@@ -25,6 +30,7 @@ static const char* CONTROL_PANEL_HTML = R"HTMLEND(
 <!DOCTYPE html>
 <html>
 <head>
+    <meta charset="utf-8">
     <title>HTML2NDI Control Panel</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <style>
@@ -432,6 +438,29 @@ void HttpServer::setup_routes() {
         // Add genlocked status if available
         status["genlocked"] = (genlock && genlock->mode() != GenlockMode::Disabled && genlock->is_synchronized());
         
+        // Add performance metrics
+        if (pump) {
+            status["performance"] = {
+                {"buffer_size_bytes", pump->current_buffer_size()},
+                {"avg_submit_time_us", pump->avg_submit_time_us()},
+                {"avg_memcpy_time_us", pump->avg_memcpy_time_us()},
+                {"uptime_seconds", pump->uptime_seconds()},
+                {"bandwidth_mbps", pump->bandwidth_bytes_per_sec() / 1000000.0}
+            };
+        }
+        
+        // Add memory metrics (macOS specific)
+        #ifdef __APPLE__
+        struct mach_task_basic_info info;
+        mach_msg_type_number_t size = MACH_TASK_BASIC_INFO_COUNT;
+        if (task_info(mach_task_self(), MACH_TASK_BASIC_INFO, (task_info_t)&info, &size) == KERN_SUCCESS) {
+            status["memory"] = {
+                {"resident_size_mb", info.resident_size / 1024.0 / 1024.0},
+                {"virtual_size_mb", info.virtual_size / 1024.0 / 1024.0}
+            };
+        }
+        #endif
+        
         res.set_content(status.dump(2), "application/json");
     });
     
@@ -723,7 +752,7 @@ void HttpServer::setup_routes() {
     // GET / - Control Panel GUI
     server_->Get("/", [add_cors](const httplib::Request&, httplib::Response& res) {
         add_cors(res);
-        res.set_content(CONTROL_PANEL_HTML, "text/html");
+        res.set_content(CONTROL_PANEL_HTML, "text/html; charset=utf-8");
     });
     
     // GET /testcard - Test card page with time and stream info
@@ -746,7 +775,7 @@ void HttpServer::setup_routes() {
         replace_all("%HEIGHT%", std::to_string(app_->config().height));
         replace_all("%FPS%", std::to_string(app_->config().fps));
         
-        res.set_content(html, "text/html");
+        res.set_content(html, "text/html; charset=utf-8");
     });
     
     // Error handler

@@ -58,11 +58,13 @@ HTML2NDI consists of two components:
 - Multi-stream management via native macOS menu bar app
 - Web-based configuration dashboard
 - **Genlock support for frame-accurate multi-stream synchronization**
+- **Automatic performance monitoring and recovery** (prevents stuttering)
 - Live preview thumbnails for running streams
 - Configurable color space (Rec. 709, Rec. 2020, sRGB, Rec. 601)
 - Editable stream names and NDI source names
 - Auto-generated unique identifiers
 - HTTP control API per stream
+- Real-time performance metrics (FPS, memory, timing)
 - 1920x1080 @ 60fps default resolution
 - Graceful shutdown and error handling
 - macOS unified logging (Console.app + file logs)
@@ -334,7 +336,7 @@ Each worker exposes a REST API on its configured port.
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/status` | GET | Current state (URL, FPS, connections, color settings) |
+| `/status` | GET | Current state (URL, FPS, connections, **performance metrics**) |
 | `/seturl` | POST | Navigate to new URL: `{"url": "..."}` |
 | `/reload` | POST | Reload current page |
 | `/shutdown` | POST | Graceful shutdown |

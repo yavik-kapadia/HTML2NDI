@@ -19,7 +19,10 @@ namespace html2ndi {
 
 Application::Application(Config config)
     : config_(std::move(config))
-    , current_url_(new std::string(config_.url)) {
+    , current_url_(new std::string(config_.url))
+    , start_time_(std::chrono::steady_clock::now())
+    , last_reload_time_(std::chrono::steady_clock::now())
+    , last_gc_time_(std::chrono::steady_clock::now()) {
 }
 
 Application::~Application() {
@@ -113,6 +116,54 @@ int Application::run() {
         // Update actual FPS from frame pump
         if (frame_pump_) {
             actual_fps_ = frame_pump_->actual_fps();
+        }
+        
+        auto now = std::chrono::steady_clock::now();
+        auto uptime = std::chrono::duration_cast<std::chrono::seconds>(now - start_time_).count();
+        
+        // Performance monitoring and recovery (after initial startup period)
+        if (uptime > kWatchdogStartupDelay) {
+            // Check for frame rate degradation
+            float target_fps = static_cast<float>(config_.fps);
+            float fps_threshold = target_fps * kFpsThresholdRatio;
+            
+            if (actual_fps_ < fps_threshold && actual_fps_ > 0.1f) {
+                degradation_count_++;
+                
+                if (degradation_count_ >= kDegradationCheckCount) {
+                    LOG_WARNING("Frame rate degradation detected: %.1f fps (target: %.0f fps). Triggering recovery...", 
+                               actual_fps_.load(), target_fps);
+                    
+                    // Try JavaScript GC first
+                    renderer_->execute_javascript("if (window.gc) window.gc();");
+                    renderer_->notify_memory_pressure();
+                    
+                    // If still degraded after minimum interval, reload page
+                    auto since_reload = std::chrono::duration_cast<std::chrono::seconds>(
+                        now - last_reload_time_).count();
+                    
+                    if (since_reload > kMinReloadInterval) {
+                        LOG_WARNING("Reloading page to recover from performance degradation");
+                        renderer_->reload();
+                        last_reload_time_ = now;
+                    }
+                    
+                    degradation_count_ = 0;
+                }
+            } else {
+                degradation_count_ = 0;
+            }
+            
+            // Periodic JavaScript garbage collection
+            auto since_gc = std::chrono::duration_cast<std::chrono::seconds>(
+                now - last_gc_time_).count();
+            
+            if (since_gc >= kGarbageCollectionInterval) {
+                LOG_DEBUG("Triggering periodic JavaScript garbage collection");
+                renderer_->execute_javascript("if (window.gc) window.gc();");
+                renderer_->notify_memory_pressure();
+                last_gc_time_ = now;
+            }
         }
         
         // Small sleep to prevent spinning

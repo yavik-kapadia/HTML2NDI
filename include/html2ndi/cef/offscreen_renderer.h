@@ -87,6 +87,16 @@ public:
      * Check if CEF is initialized.
      */
     bool is_initialized() const { return initialized_; }
+    
+    /**
+     * Clear browser cache.
+     */
+    void clear_cache();
+    
+    /**
+     * Send memory pressure notification to CEF.
+     */
+    void notify_memory_pressure();
 
 private:
     Config config_;

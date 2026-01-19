@@ -102,6 +102,10 @@ public:
     
     // Resize viewport
     void Resize(int width, int height);
+    
+    // Performance metrics
+    double avg_paint_interval_ms() const { return avg_paint_interval_ms_; }
+    uint64_t paint_count() const { return paint_count_; }
 
 private:
     int width_;
@@ -114,6 +118,11 @@ private:
     
     std::string current_url_;
     std::string current_title_;
+    
+    // Performance tracking
+    std::atomic<uint64_t> paint_count_{0};
+    std::atomic<double> avg_paint_interval_ms_{0.0};
+    std::chrono::steady_clock::time_point last_paint_time_;
     
     IMPLEMENT_REFCOUNTING(CefHandler);
     DISALLOW_COPY_AND_ASSIGN(CefHandler);
