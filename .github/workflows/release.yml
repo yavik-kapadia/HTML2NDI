@@ -83,7 +83,11 @@ jobs:
           -DCMAKE_BUILD_TYPE=Release \
           -DCMAKE_OSX_ARCHITECTURES=arm64 \
           -DBUILD_TESTS=ON
-        ninja
+        # Build with verbose output to catch compilation errors early
+        ninja -v || {
+          echo "::error::Build failed - check compiler errors above"
+          exit 1
+        }
 
     - name: Run C++ tests
       run: |

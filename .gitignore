@@ -83,3 +83,7 @@ node_modules/
 
 # AWS policy files
 *-policy.json
+
+# Release artifacts (created by CI/CD)
+releases/
+ndi_sdk/

@@ -150,6 +150,55 @@ If you discover a version conflict:
 3. **Common fix**: Increment to next available version
 4. **Example**: If `v1.4.0` exists, use `v1.5.0-alpha` (not `v1.4.0-alpha`)
 
+### 8. Automated Pre-Release Verification
+
+**CRITICAL: Run before EVERY release!**
+
+Use the automated pre-release check script:
+
+```bash
+./scripts/pre-release-check.sh
+```
+
+This script verifies:
+- Version consistency across all files
+- Clean build from scratch (both C++ and Swift)
+- All unit tests pass
+- All executables run without errors
+- No uncommitted changes
+- Required documentation exists
+- No common code issues (debug prints, TODOs in critical paths)
+
+**If the script fails, DO NOT proceed with the release until all issues are fixed.**
+
+### 9. Testing Requirements Before Release
+
+Before any release, ensure:
+
+1. **Unit Tests Coverage**:
+   - All new features have unit tests
+   - All bug fixes have regression tests
+   - Audio/Video code paths are tested
+   - Run: `./build/html2ndi_tests`
+
+2. **Integration Tests**:
+   - Performance test passes: `./tests/integration/test_performance.sh`
+   - Manual smoke test of common workflows
+   - Test with actual NDI receivers
+
+3. **Compilation Tests**:
+   - Clean build succeeds on macOS (arm64)
+   - All code paths compile (including unused features like audio)
+   - No compiler warnings in release mode
+
+4. **Manual Verification**:
+   - Launch HTML2NDI Manager
+   - Create a test stream
+   - Verify NDI output in a receiver (OBS, vMix, etc.)
+   - Check web dashboard works
+   - Verify stream controls work
+   - Test performance monitoring
+
 ---
 
 ## Build & Run Procedures
@@ -221,10 +270,25 @@ Every feature must have corresponding tests:
 
 | Test Type | Location | Purpose |
 |-----------|----------|---------|
-| **C++ Unit Tests** | `tests/cpp/` | Core logic, config parsing, APIs |
+| **C++ Unit Tests** | `tests/cpp/` | Core logic, config parsing, APIs, NDI sender |
 | **Swift Unit Tests** | `manager/Tests/` | UI components, stream management |
 | **Web UI Tests** | `tests/web/` | Dashboard controls, user interactions |
-| **Integration Tests** | `tests/integration/` | End-to-end NDI output validation |
+| **Integration Tests** | `tests/integration/` | End-to-end NDI output validation, performance tests |
+| **Mock Infrastructure** | `tests/mocks/` | NDI SDK mocks for local testing |
+
+### Mock NDI SDK for Local Testing
+
+For local development without the full NDI SDK:
+
+- **Mock Headers**: `tests/mocks/Processing.NDI.Lib.h`
+- **Mock Implementation**: `tests/mocks/ndi_mock.cpp`
+- **Purpose**: Provides stub NDI functions for compilation and unit testing
+- **Important**: Mock API signatures must match production SDK to catch type errors
+
+The mock SDK is especially useful for:
+- Running unit tests without NDI runtime installed
+- CI environments where NDI SDK may not be available
+- Testing compilation of all code paths (including unused features like audio)
 
 ### Running Tests
 
@@ -232,9 +296,20 @@ Every feature must have corresponding tests:
 
 ```bash
 cd build
-ninja test_runner
-./test_runner
+ninja html2ndi_tests
+./html2ndi_tests
 ```
+
+**Test Files**:
+- `tests/cpp/test_main.cpp` - Test runner entry point
+- `tests/cpp/test_logger.cpp` - Logging functionality
+- `tests/cpp/test_config.cpp` - Configuration parsing
+- `tests/cpp/test_ndi_sender.cpp` - NDI audio/video sending (NEW)
+
+**Coverage Requirements**:
+- All NDI sender public methods must be tested
+- Audio and video code paths must have unit tests
+- Type compatibility with NDI SDK must be verified
 
 #### Swift Unit Tests
 
@@ -290,6 +365,23 @@ python3 test_ndi_output.py
 |----------|---------|---------|
 | `build.yml` | Push to `main` | Build and test on every commit |
 | `release.yml` | Tag push (`v*`) | Build, sign, notarize, and release |
+
+### CI/CD Best Practices
+
+1. **Fail Fast**: Build should fail immediately on first error
+2. **Clear Error Messages**: Compiler errors should be visible in logs
+3. **Test Before Release**: Never skip test execution
+4. **Version Verification**: CI should verify version consistency
+5. **Compilation Coverage**: Ensure all code paths compile, not just used ones
+
+### Common CI Failures and Fixes
+
+| Error | Cause | Fix |
+|-------|-------|-----|
+| Incompatible pointer types | Type mismatch with NDI SDK | Verify mock headers match production SDK |
+| Missing symbols | Unused code not compiled locally | Run full build before pushing |
+| Test failures | Environment differences | Use mock SDK for consistent testing |
+| Version mismatch | Forgot to update all locations | Use pre-release-check.sh script |
 
 ### Release Process
 
