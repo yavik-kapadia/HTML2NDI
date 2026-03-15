@@ -136,6 +136,7 @@ struct DashboardView: View {
             // Detail View
             if let stream = selectedStream {
                 StreamDetailView(stream: stream)
+                    .id(stream.id)
             } else {
                 VStack(spacing: 20) {
                     Image(systemName: "tv.and.mediabox")
